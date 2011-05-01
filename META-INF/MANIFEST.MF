@@ -1,0 +1,2 @@
+Manifest-Version: 1.0
+Class-Path: craftbukkit-0.0.1-SNAPSHOT.jar WorldEdit.jar

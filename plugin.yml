@@ -1,0 +1,10 @@
+name: RegionControl
+main: us.axefan.demo.RegionControl
+version: 0.1
+author: axefan
+database: true
+description: Save and restore region contents and player inventory based on conditions and events.
+commands:
+    rc:
+        description: Advanced region control.
+        usage: /rc <action>
