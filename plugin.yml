@@ -1,5 +1,5 @@
 name: RegionControl
-main: us.axefan.demo.RegionControl
+main: us.axefan.plugin.RegionControl
 version: 0.1
 author: axefan
 database: true

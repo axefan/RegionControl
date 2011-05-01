@@ -72,153 +72,12 @@ public class CommandExecutor implements org.bukkit.command.CommandExecutor {
 				return true;
 			}
 			if (args.length == 2) {
-				this.frame(player, args[1].trim());
+				plugin.frame(player.getWorld(), player, args[1].trim());
 			}else{
-				this.frame(player, args[1].trim(), Integer.parseInt(args[2].trim()));
+				plugin.frame(player.getWorld(), player, args[1].trim(), Integer.parseInt(args[2].trim()));
 			}
 			return true;
 		}else return false;
-	}
-	
-	/*
-	 * Restores a region to the next snapshot frame.
-	 * @param player - The player.
-	 * @param name - The name of the region.
-	 */
-	private void frame(Player player, String name) {
-		// Get the controlled region
-		EbeanServer db = this.plugin.getDatabase();
-		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
-		if (region == null){
-			player.sendMessage("no such region");
-			return;
-		}
-		// Get the current snapshot.
-		List<RegionSnapshot> snapshots = db.find(RegionSnapshot.class).where().eq("regionId", region.getId()).orderBy("id").findList();
-		if (snapshots.size() == 0){
-			player.sendMessage("no snapshots defined for this region");
-			return;
-		}
-		// Auto-index to the next frame.  Wrap to first frame on last entry.
-		int index;
-		int snapshotId = region.getSnapshotId();
-		if (snapshotId == 0){
-			player.sendMessage("Error: Invalid region! Current snapshot not found.");
-			return;
-		}else{
-			RegionSnapshot currentSnapshot = db.find(RegionSnapshot.class).where().eq("id", snapshotId).findUnique();
-			index = snapshots.indexOf(currentSnapshot) + 1;
-			if (index == snapshots.size()) index = 0;
-		}
-		// Restore the frame.
-		this.frame(player, region, snapshots, index + 1);
-	}
-	
-	/*
-	 * Restores a region to the specified snapshot frame.
-	 * @param player - The player.
-	 * @param name - The name of the region.
-	 * @param index - The index of the frame to restore.
-	 */
-	private void frame(Player player, String name, int index) {
-		// Get the controlled region
-		EbeanServer db = this.plugin.getDatabase();
-		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
-		if (region == null){
-			player.sendMessage("no such region");
-			return;
-		}
-		// Get the requested snapshot.
-		List<RegionSnapshot> snapshots = db.find(RegionSnapshot.class).where().eq("regionId", region.getId()).orderBy("id").findList();
-		if (snapshots.size() == 0){
-			player.sendMessage("no snapshots defined for this region");
-			return;
-		}
-		// Restore the frame.
-		this.frame(player, region, snapshots, index);
-		
-//		// Check index bounds.
-//		index--;
-//		if (index < 0 || index >= snapshots.size()) {
-//			player.sendMessage("invalid frame");
-//			return;
-//		}
-//		RegionSnapshot snapshot = snapshots.get(index);
-//		// Get the saved blocks for this snapshot.
-//		World world = player.getWorld();
-//		List<SavedBlock> savedBlocks = db.find(SavedBlock.class)
-//			.where().eq("snapshotId", snapshot.getId())
-//			.orderBy("id").findList();
-//		int saveBlockIndex = 0;
-//		for (int x = region.getMinX(); x <= region.getMaxX(); x++){
-//			for (int y = region.getMinY(); y <= region.getMaxY(); y++){
-//				for (int z = region.getMinZ(); z <= region.getMaxZ(); z++){
-//					Block block = world.getBlockAt(x, y, z);
-//					SavedBlock savedBlock = null;
-//					try{
-//						savedBlock = savedBlocks.get(saveBlockIndex++);
-//					}catch(Exception ex){
-//						System.out.print("Bad index: " + saveBlockIndex--);
-//					}
-//					if (savedBlock != null){
-//						if (block.getTypeId() != savedBlock.getTypeId() || block.getData() != savedBlock.getData()){
-//							block.setTypeIdAndData(savedBlock.getTypeId(), savedBlock.getData(), false);
-//						}						
-//					}
-//				}
-//			}
-//		}
-//		// Set controlled region's current snapshot.
-//		region.setSnapshotId(snapshot.getId());
-//		db.update(region);
-//		// Notify player.
-//		player.sendMessage("frame restored");
-	}
-	
-	/*
-	 * Restores a region to the specified snapshot frame.
-	 * @param player - The player.
-	 * @param region - The controlled region.
-	 * @param snapshots - A list of snapshots for the controlled region.
-	 * @param index - The index of the frame to restore.
-	 */
-	private void frame(Player player, ControlledRegion region, List<RegionSnapshot> snapshots, int index) {
-		// Check index bounds.
-		if (index < 1 || index > snapshots.size()) {
-			player.sendMessage("invalid frame");
-			return;
-		}
-		RegionSnapshot snapshot = snapshots.get(index-1);
-		// Get the saved blocks for this snapshot.
-		World world = player.getWorld();
-		EbeanServer db = this.plugin.getDatabase();
-		List<SavedBlock> savedBlocks = db.find(SavedBlock.class)
-			.where().eq("snapshotId", snapshot.getId())
-			.orderBy("id").findList();
-		int saveBlockIndex = 0;
-		for (int x = region.getMinX(); x <= region.getMaxX(); x++){
-			for (int y = region.getMinY(); y <= region.getMaxY(); y++){
-				for (int z = region.getMinZ(); z <= region.getMaxZ(); z++){
-					Block block = world.getBlockAt(x, y, z);
-					SavedBlock savedBlock = null;
-					try{
-						savedBlock = savedBlocks.get(saveBlockIndex++);
-					}catch(Exception ex){
-						System.out.print("Bad index: " + saveBlockIndex--);
-					}
-					if (savedBlock != null){
-						if (block.getTypeId() != savedBlock.getTypeId() || block.getData() != savedBlock.getData()){
-							block.setTypeIdAndData(savedBlock.getTypeId(), savedBlock.getData(), false);
-						}						
-					}
-				}
-			}
-		}
-		// Set controlled region's current snapshot.
-		region.setSnapshotId(snapshot.getId());
-		db.update(region);
-		// Notify player.
-		player.sendMessage("frame " + Integer.toString(index) + "." + snapshot.getId() + " restored");		
 	}
 	
 	/*
@@ -342,8 +201,19 @@ public class CommandExecutor implements org.bukkit.command.CommandExecutor {
 			player.sendMessage("no such region");
 			return;
 		}
+		// Begin transaction.
+		db.beginTransaction();
+		// Delete all related blocks
+		List<SavedBlock> savedBlocks = db.find(SavedBlock.class)
+			.where().eq("regionId", region.getId()).findList();
+		db.delete(savedBlocks);
+		// Delete all related snapshots.
+		List<RegionSnapshot> snapshots = db.find(RegionSnapshot.class).where().eq("regionId", region.getId()).orderBy("id").findList();
+		db.delete(snapshots);
 		// Delete the controlled region.
 		db.delete(region);
+		// Commit transaction.
+		db.commitTransaction();
 		player.sendMessage("region deleted");
 	}
 	
@@ -366,7 +236,7 @@ public class CommandExecutor implements org.bukkit.command.CommandExecutor {
 		// Display snapshot info.
 		int snapshotId = region.getSnapshotId();
 		if (snapshotId != 0){
-			List<RegionSnapshot> snapshots = db.find(RegionSnapshot.class).orderBy("id").findList();
+			List<RegionSnapshot> snapshots = db.find(RegionSnapshot.class).where().eq("regionId", region.getId()).orderBy("id").findList();
 			RegionSnapshot currentSnapshot = db.find(RegionSnapshot.class).where().eq("id", snapshotId).findUnique();
 			player.sendMessage("snapshots = " + Integer.toString(snapshots.size()));
 			player.sendMessage("current = " + Integer.toString(snapshots.indexOf(currentSnapshot) + 1));
