@@ -36,6 +36,17 @@ public class ControlledRegion {
     
     @NotNull
     private int snapshotId;
+    
+    @NotNull
+    private int maxPlayers;
+    
+    // location to place players
+    // - when plugin is unloaded while locked
+    // - when region is removed while locked
+    // - when player dies while locked?
+    // private int returnX;
+    // private int returnY;
+    // private int returnZ;
 
 	public void setId(int id) {
 		this.id = id;
@@ -107,6 +118,14 @@ public class ControlledRegion {
 
 	public int getSnapshotId() {
 		return snapshotId;
+	}
+
+	public void setMaxPlayers(int maxPlayers) {
+		this.maxPlayers = maxPlayers;
+	}
+
+	public int getMaxPlayers() {
+		return maxPlayers;
 	}
 	
 }

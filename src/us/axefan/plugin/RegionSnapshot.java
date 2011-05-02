@@ -6,9 +6,6 @@ import javax.persistence.Table;
 
 import com.avaje.ebean.validation.NotNull;
 
-/*
- * Container for a set of blocks that represent a region in a particular state.
- */
 @Entity()
 @Table(name="RegionSnapshot")
 public class RegionSnapshot {

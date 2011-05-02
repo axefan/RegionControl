@@ -19,7 +19,7 @@ public class CommandExecutor implements org.bukkit.command.CommandExecutor {
 	
 	private RegionControl plugin;
 	
-	public CommandExecutor(RegionControl instance){
+	public CommandExecutor(RegionControl instance) {
 		this.plugin = instance;
 	}
 	
@@ -76,6 +76,20 @@ public class CommandExecutor implements org.bukkit.command.CommandExecutor {
 			}else{
 				plugin.frame(player.getWorld(), player, args[1].trim(), Integer.parseInt(args[2].trim()));
 			}
+			return true;
+		}else if (action.equals("lock")) {
+			if (args.length < 2) {
+				player.sendMessage("/rc lock <name>");
+				return true;
+			}
+			plugin.lock(player, args[1].trim());
+			return true;
+		}else if (action.equals("unlock")) {
+			if (args.length < 2) {
+				player.sendMessage("/rc unlock <name>");
+				return true;
+			}
+			plugin.unlock(player, args[1].trim());
 			return true;
 		}else return false;
 	}
@@ -151,7 +165,8 @@ public class CommandExecutor implements org.bukkit.command.CommandExecutor {
 		region.setMinX((int)min.getX());
 		region.setMinY((int)min.getY());
 		region.setMinZ((int)min.getZ());
-		region.setSnapshotId(0);
+		region.setSnapshotId(0); // no current snapshot
+		region.setMaxPlayers(0); // unlimited players
 		// Save the new controlled region record.
 		db.save(region);
 		player.sendMessage("region created");
