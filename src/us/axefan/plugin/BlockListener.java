@@ -21,9 +21,9 @@ public class BlockListener extends org.bukkit.event.block.BlockListener {
 		{
 		    Sign sign = (Sign)blockState;
 		    String[] lines = sign.getLines();
-		    if (lines[0].trim().equalsIgnoreCase("[RegionControl]")){
-		    	if (lines[1].trim().equalsIgnoreCase("frame")){
-		    		plugin.frame(block.getWorld(), null, lines[2]);
+		    if (lines[0].trim().equalsIgnoreCase("[RegionControl]")) {
+		    	if (lines[1].trim().equalsIgnoreCase("frame")) {
+		    		plugin.frame(null, lines[2]);
 		    	}
 		    }
 		}

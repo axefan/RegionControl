@@ -24,6 +24,15 @@ public class SavedBlock {
     
     @NotNull
     private byte data;
+    
+    @NotNull
+    private int x;
+    
+    @NotNull
+    private int y;
+    
+    @NotNull
+    private int z;
 
 	public void setId(int id) {
 		this.id = id;
@@ -63,6 +72,30 @@ public class SavedBlock {
 
 	public byte getData() {
 		return data;
+	}
+
+	public void setX(int x) {
+		this.x = x;
+	}
+
+	public int getX() {
+		return x;
+	}
+
+	public void setY(int y) {
+		this.y = y;
+	}
+
+	public int getY() {
+		return y;
+	}
+
+	public void setZ(int z) {
+		this.z = z;
+	}
+
+	public int getZ() {
+		return z;
 	}
     
 }

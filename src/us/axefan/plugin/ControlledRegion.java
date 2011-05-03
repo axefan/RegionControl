@@ -14,6 +14,9 @@ public class ControlledRegion {
     private int id;
     
     @NotNull
+    private String world;
+    
+    @NotNull
     private String name;
     
     @NotNull
@@ -40,14 +43,10 @@ public class ControlledRegion {
     @NotNull
     private int maxPlayers;
     
-    // location to place players
-    // - when plugin is unloaded while locked
-    // - when region is removed while locked
-    // - when player dies while locked?
-    // private int returnX;
-    // private int returnY;
-    // private int returnZ;
-
+    // TODO: Add ControlledRegion.failSpawn point (for kick from controlled region - death on ControlledRegion.maxTries, on reload).
+    // TODO: Add ControlledRegion.retrySpawn point (for reset after death when less than ControlledRegion.maxTries.
+    // TODO: Add ControlledRegion.maxTries & LockedPlayer.tries (number of deaths before kick to ControlledRegion.failSpawn).
+    
 	public void setId(int id) {
 		this.id = id;
 	}
@@ -126,6 +125,14 @@ public class ControlledRegion {
 
 	public int getMaxPlayers() {
 		return maxPlayers;
+	}
+
+	public void setWorld(String world) {
+		this.world = world;
+	}
+
+	public String getWorld() {
+		return world;
 	}
 	
 }
