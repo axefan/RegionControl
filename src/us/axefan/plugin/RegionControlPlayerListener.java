@@ -6,21 +6,17 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 
-public class PlayerListener extends org.bukkit.event.player.PlayerListener {
+public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerListener {
 
 	public static RegionControl plugin;
 	
-	public PlayerListener(RegionControl instance) {
+	public RegionControlPlayerListener(RegionControl instance) {
 		plugin = instance;
-//		this.onPlayerAnimation(event);
-//		this.onPlayerInteract(event);
-//		this.onPlayerTeleport(event)
 	}
 	
 	public void onPlayerMove(PlayerMoveEvent event) {
-		if (event.isCancelled()) return;
-//		Player player = event.getPlayer();
-	//	event.setTo(event.getFrom());
+        event.setCancelled(true);
+        event.setTo(event.getFrom());
 	}
 
 	public void onPlayerQuit(PlayerQuitEvent event) {

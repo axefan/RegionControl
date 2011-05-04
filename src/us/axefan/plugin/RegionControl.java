@@ -31,16 +31,16 @@ public class RegionControl extends JavaPlugin {
 	
 	private WorldEditPlugin worldEditPlugin = null;
 	private WorldEditAPI worldEditApi = null;
-//    private final PlayerListener playerListener = new PlayerListener(this);
+    private final RegionControlPlayerListener playerListener = new RegionControlPlayerListener(this);
 //    private final EntityListener entityListener = new EntityListener(this);
-    private final BlockListener blockListener = new BlockListener(this);
+    private final RegionControlBlockListener blockListener = new RegionControlBlockListener(this);
 	
 	public void onEnable() {
         PluginDescriptionFile desc = this.getDescription();
         System.out.println(desc.getName() + " starting...");
 		this.getCommand("rc").setExecutor(new CommandExecutor (this));
 		PluginManager pm = getServer().getPluginManager();
-//		pm.registerEvent(Event.Type.PLAYER_MOVE, playerListener, Event.Priority.Normal, this);
+		pm.registerEvent(Event.Type.PLAYER_MOVE, playerListener, Event.Priority.Normal, this);
 //		pm.registerEvent(Event.Type.PLAYER_QUIT, playerListener, Event.Priority.Normal, this);
 //		pm.registerEvent(Event.Type.PLAYER_KICK, playerListener, Event.Priority.Normal, this);
 //		pm.registerEvent(Event.Type.PLAYER_RESPAWN, playerListener, Event.Priority.Normal, this);

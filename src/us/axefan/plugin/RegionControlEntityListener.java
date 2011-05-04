@@ -3,11 +3,11 @@ package us.axefan.plugin;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDeathEvent;
 
-public class EntityListener extends org.bukkit.event.entity.EntityListener {
+public class RegionControlEntityListener extends org.bukkit.event.entity.EntityListener {
 	
 	public static RegionControl plugin;
 	
-	public EntityListener(RegionControl instance) {
+	public RegionControlEntityListener(RegionControl instance) {
 		plugin = instance;
 	}
 

@@ -5,11 +5,11 @@ import org.bukkit.block.BlockState;
 import org.bukkit.block.Sign;
 import org.bukkit.event.block.BlockRedstoneEvent;
 
-public class BlockListener extends org.bukkit.event.block.BlockListener {
+public class RegionControlBlockListener extends org.bukkit.event.block.BlockListener {
 	
 	public static RegionControl plugin;
 	
-	public BlockListener(RegionControl instance) {
+	public RegionControlBlockListener(RegionControl instance) {
 		plugin = instance;
 	}
 	
