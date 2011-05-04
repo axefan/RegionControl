@@ -31,8 +31,8 @@ public class RegionControl extends JavaPlugin {
 	
 	private WorldEditPlugin worldEditPlugin = null;
 	private WorldEditAPI worldEditApi = null;
-    private final PlayerListener playerListener = new PlayerListener(this);
-    private final EntityListener entityListener = new EntityListener(this);
+//    private final PlayerListener playerListener = new PlayerListener(this);
+//    private final EntityListener entityListener = new EntityListener(this);
     private final BlockListener blockListener = new BlockListener(this);
 	
 	public void onEnable() {
@@ -40,12 +40,12 @@ public class RegionControl extends JavaPlugin {
         System.out.println(desc.getName() + " starting...");
 		this.getCommand("rc").setExecutor(new CommandExecutor (this));
 		PluginManager pm = getServer().getPluginManager();
-		pm.registerEvent(Event.Type.PLAYER_MOVE, playerListener, Event.Priority.Normal, this);
-		pm.registerEvent(Event.Type.PLAYER_QUIT, playerListener, Event.Priority.Normal, this);
-		pm.registerEvent(Event.Type.PLAYER_KICK, playerListener, Event.Priority.Normal, this);
-		pm.registerEvent(Event.Type.PLAYER_RESPAWN, playerListener, Event.Priority.Normal, this);
-		pm.registerEvent(Event.Type.PLAYER_TELEPORT, playerListener, Event.Priority.Normal, this);
-		pm.registerEvent(Event.Type.ENTITY_DEATH, entityListener, Event.Priority.Normal, this);
+//		pm.registerEvent(Event.Type.PLAYER_MOVE, playerListener, Event.Priority.Normal, this);
+//		pm.registerEvent(Event.Type.PLAYER_QUIT, playerListener, Event.Priority.Normal, this);
+//		pm.registerEvent(Event.Type.PLAYER_KICK, playerListener, Event.Priority.Normal, this);
+//		pm.registerEvent(Event.Type.PLAYER_RESPAWN, playerListener, Event.Priority.Normal, this);
+//		pm.registerEvent(Event.Type.PLAYER_TELEPORT, playerListener, Event.Priority.Normal, this);
+//		pm.registerEvent(Event.Type.ENTITY_DEATH, entityListener, Event.Priority.Normal, this);
 		pm.registerEvent(Event.Type.REDSTONE_CHANGE, blockListener, Event.Priority.Normal, this);
 		this.worldEditPlugin = (WorldEditPlugin) this.getServer().getPluginManager().getPlugin("WorldEdit");
 		if (this.worldEditPlugin != null){
@@ -178,49 +178,49 @@ public class RegionControl extends JavaPlugin {
 			player.sendMessage("region is already locked");
 			return;
 		}
-		try {
-			// Create a region lock object for this region.
-			RegionLock regionLock = new RegionLock();
-			regionLock.setRegionId(region.getId());
-			// Create locked player and saved item objects.
-			List<LockedPlayer> lockedPlayers = new ArrayList<LockedPlayer>();
-			List<SavedItem> savedItems = new ArrayList<SavedItem>();
-			World world = this.getServer().getWorld(region.getWorld());
-			List<Player> worldPlayers = world.getPlayers();
-			for (Player worldPlayer : worldPlayers) {
-				if (this.regionContainsPlayer(region, worldPlayer)) {
-					LockedPlayer lockedPlayer = new LockedPlayer();
-					lockedPlayer.setName(worldPlayer.getName());
-					lockedPlayer.setRegionId(region.getId());
-					lockedPlayer.setHealth(player.getHealth());
-					lockedPlayers.add(lockedPlayer);
-					// Create saved item objects for inventory.
-					PlayerInventory inventory = worldPlayer.getInventory();
-					for (ItemStack item : inventory.getContents()) {
-						if (item != null) {
-							savedItems.add(this.createSavedItem(item, worldPlayer, 0));
-						}
+		// Create a region lock object for this region.
+		RegionLock regionLock = new RegionLock();
+		regionLock.setRegionId(region.getId());
+		// Create locked player and saved item objects.
+		List<LockedPlayer> lockedPlayers = new ArrayList<LockedPlayer>();
+		List<SavedItem> savedItems = new ArrayList<SavedItem>();
+		World world = this.getServer().getWorld(region.getWorld());
+		List<Player> worldPlayers = world.getPlayers();
+		for (Player worldPlayer : worldPlayers) {
+			if (this.regionContainsPlayer(region, worldPlayer)) {
+				LockedPlayer lockedPlayer = new LockedPlayer();
+				lockedPlayer.setName(worldPlayer.getName());
+				lockedPlayer.setRegionId(region.getId());
+				lockedPlayer.setHealth(player.getHealth());
+				lockedPlayers.add(lockedPlayer);
+				// Create saved item objects for inventory.
+				PlayerInventory inventory = worldPlayer.getInventory();
+				for (ItemStack item : inventory.getContents()) {
+					if (item != null && item.getTypeId() != 0) {
+						savedItems.add(this.createSavedItem(item, worldPlayer, 0));
 					}
-					ItemStack helmet = inventory.getHelmet();
-					if (helmet != null) savedItems.add(this.createSavedItem(helmet, worldPlayer, 1));
-					ItemStack chestPlate = inventory.getChestplate();
-					if (chestPlate != null) savedItems.add(this.createSavedItem(chestPlate, worldPlayer, 2));
-					ItemStack leggings = inventory.getLeggings();
-					if (leggings != null) savedItems.add(this.createSavedItem(leggings, worldPlayer, 3));
-					ItemStack boots = inventory.getBoots();
-					if (boots != null) savedItems.add(this.createSavedItem(boots, worldPlayer, 4));
-					// Set player inventory.
-					inventory.setHelmet(null);
-					inventory.setChestplate(null);
-					inventory.setLeggings(null);
-					inventory.setBoots(null);
-					// Clear the player's inventory.
-					inventory.clear(); // TODO: Use clearInventory option.
-					// TODO: Give any region items to the player.
-					// Set player health.
-					player.setHealth(20); // TODO: Make initialHealth region setting.
 				}
+				ItemStack helmet = inventory.getHelmet();
+				if (helmet != null) savedItems.add(this.createSavedItem(helmet, worldPlayer, 1));
+				ItemStack chestPlate = inventory.getChestplate();
+				if (chestPlate != null) savedItems.add(this.createSavedItem(chestPlate, worldPlayer, 2));
+				ItemStack leggings = inventory.getLeggings();
+				if (leggings != null) savedItems.add(this.createSavedItem(leggings, worldPlayer, 3));
+				ItemStack boots = inventory.getBoots();
+				if (boots != null) savedItems.add(this.createSavedItem(boots, worldPlayer, 4));
+				// Clear the player's inventory.
+				inventory.clear(); // TODO: Use clearInventory option.
+				inventory.setHelmet(null);
+				inventory.setChestplate(null);
+				inventory.setLeggings(null);
+				inventory.setBoots(null);
+				// TODO: Give any region items to the player.
+				// Set player health.
+				player.setHealth(20); // TODO: Make initialHealth region setting.
 			}
+		}
+		// Write records.
+		try {
 			// Begin transaction.
 			db.beginTransaction();
 			// Set the region lock.
@@ -263,33 +263,39 @@ public class RegionControl extends JavaPlugin {
 			player.sendMessage("region is not locked");
 			return;
 		}
-		try {
-			// Get all locked players for this region.
-			List<LockedPlayer> lockedPlayers = db.find(LockedPlayer.class).where().eq("regionId", region.getId()).findList();
-			List<SavedItem> allSavedItems = new ArrayList<SavedItem>();
-			for (LockedPlayer lockedPlayer : lockedPlayers) {
-				// Restore player's inventory.
-				Player regionPlayer = this.getServer().getPlayer(lockedPlayer.getName());
-				PlayerInventory inventory = regionPlayer.getInventory();
-				inventory.clear();
-				List<SavedItem> savedItems = db.find(SavedItem.class).where().eq("playerName", player.getName()).findList();
-				allSavedItems.addAll(savedItems);
-				for (SavedItem savedItem : savedItems) {
-					this.restoreInventoryItem(savedItem, inventory);
-				}
-				// Restore player's health.
-				player.setHealth(20); // TODO: Make restoreHealth(bool) leaveHealth(int) region settings.
-				
+		// Get all locked players for this region.
+		List<LockedPlayer> lockedPlayers = db.find(LockedPlayer.class).where().eq("regionId", region.getId()).findList();
+		List<SavedItem> allSavedItems = new ArrayList<SavedItem>();
+		for (LockedPlayer lockedPlayer : lockedPlayers) {
+			// Restore player's inventory.
+			Player regionPlayer = this.getServer().getPlayer(lockedPlayer.getName());
+			PlayerInventory inventory = regionPlayer.getInventory();
+			inventory.clear();
+			inventory.setHelmet(null);
+			inventory.setChestplate(null);
+			inventory.setLeggings(null);
+			inventory.setBoots(null);
+			List<SavedItem> savedItems = db.find(SavedItem.class).where().eq("playerName", player.getName()).findList();
+			allSavedItems.addAll(savedItems);
+			for (SavedItem savedItem : savedItems) {
+				this.restoreInventoryItem(savedItem, inventory);
 			}
+			// Restore player's health.
+			player.setHealth(20); // TODO: Make restoreHealth(bool) leaveHealth(int) region settings.
+		}
+		// Delete records.
+		try {
 			// Begin transaction.
 			db.beginTransaction();
 			// Delete the player's saved inventory records.
-			db.delete(allSavedItems);
+			if (allSavedItems.size() > 0) db.delete(allSavedItems);
+			// Delete the locked player records.
+			if (lockedPlayers.size() > 0) db.delete(lockedPlayers);
 			// Remove the region lock.
 			db.delete(regionLocks);
 			// Commit transaction.
 			db.commitTransaction();
-			player.sendMessage("region unlocked");			
+			player.sendMessage("region unlocked");
 		}catch(Exception ex){
 			ex.printStackTrace();
 			player.sendMessage("unable to unlock region! check server logs.");
@@ -700,22 +706,17 @@ public class RegionControl extends JavaPlugin {
 	 * @param savedItem - The saved item.
 	 */
 	private ItemStack createItemStack(SavedItem savedItem) {
-		ItemStack item = new ItemStack(savedItem.getTypeId());
+		int typeId = savedItem.getTypeId();
+		if (typeId == 0) return null;
+		ItemStack item = new ItemStack(typeId, 1);
 		item.setDurability(savedItem.getDurability());
 		item.setAmount(savedItem.getAmount());
 		if (savedItem.getData() == 0){
 			item.setData(null);
 		}else{
-			item.setData(new MaterialData(savedItem.getTypeId(), savedItem.getData()));
+			item.setData(new MaterialData(typeId, savedItem.getData()));
 		}
 		return item;
-	}
-	
-	/*
-	 * Restores a player's inventory.
-	 */
-	private void restoreInventory() {
-		
 	}
 	
 	/*
@@ -724,7 +725,9 @@ public class RegionControl extends JavaPlugin {
 	 * @param inventory - The player's inventory.
 	 */
 	private void restoreInventoryItem(SavedItem savedItem, PlayerInventory inventory) {
+		if (savedItem == null) return;
 		ItemStack item = this.createItemStack(savedItem);
+		if (item == null) return;
 		switch(savedItem.getCategory()){
 		case 0: // item
 			inventory.addItem(item);
@@ -740,6 +743,9 @@ public class RegionControl extends JavaPlugin {
 			break;
 		case 4: // boots
 			inventory.setBoots(item);
+			break;
+		default:
+			System.out.print("Error - Invalid item category: " + savedItem.getCategory());
 			break;
 		}
 	}

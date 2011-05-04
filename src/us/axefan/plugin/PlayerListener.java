@@ -12,9 +12,15 @@ public class PlayerListener extends org.bukkit.event.player.PlayerListener {
 	
 	public PlayerListener(RegionControl instance) {
 		plugin = instance;
+//		this.onPlayerAnimation(event);
+//		this.onPlayerInteract(event);
+//		this.onPlayerTeleport(event)
 	}
 	
 	public void onPlayerMove(PlayerMoveEvent event) {
+		if (event.isCancelled()) return;
+//		Player player = event.getPlayer();
+	//	event.setTo(event.getFrom());
 	}
 
 	public void onPlayerQuit(PlayerQuitEvent event) {
