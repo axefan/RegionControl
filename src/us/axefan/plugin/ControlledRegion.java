@@ -14,7 +14,7 @@ public class ControlledRegion {
     private int id;
     
     @NotNull
-    private String world;
+    private long worldId;
     
     @NotNull
     private String name;
@@ -39,6 +39,9 @@ public class ControlledRegion {
     
     @NotNull
     private int snapshotId;
+    
+    @NotNull
+    private Boolean locked;
     
     @NotNull
     private int maxPlayers;
@@ -127,12 +130,28 @@ public class ControlledRegion {
 		return maxPlayers;
 	}
 
-	public void setWorld(String world) {
-		this.world = world;
+	public void setWorldId(long worldId) {
+		this.worldId = worldId;
 	}
 
-	public String getWorld() {
-		return world;
+	public long getWorldId() {
+		return worldId;
 	}
+
+	public void setLocked(Boolean locked) {
+		this.locked = locked;
+	}
+
+	public Boolean getLocked() {
+		return locked;
+	}
+
+//	public void setWorld(String world) {
+//		this.world = world;
+//	}
+//
+//	public String getWorld() {
+//		return world;
+//	}
 	
 }

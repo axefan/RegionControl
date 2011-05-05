@@ -137,7 +137,7 @@ public class RegionControl extends JavaPlugin {
 		RegionSnapshot snapshot = snapshots.get(frameNumber-1);
 		// Restore the blocks for this snapshot.
 		EbeanServer db = this.getDatabase();
-		World world = this.getServer().getWorld(region.getWorld());
+		World world = this.getWorld(region.getWorldId());
 		List<SavedBlock> savedBlocks = db.find(SavedBlock.class).where().eq("snapshotId", snapshot.getId()).orderBy("id").findList();
 		for (SavedBlock savedBlock : savedBlocks) {
 			Block block = world.getBlockAt(savedBlock.getX(), savedBlock.getY(), savedBlock.getZ());
@@ -174,17 +174,16 @@ public class RegionControl extends JavaPlugin {
 			return;
 		}
 		// Check current region status.
-		if (db.find(RegionLock.class).where().eq("regionId", region.getId()).findRowCount() > 0) {
+		if (region.getLocked()) {
 			player.sendMessage("region is already locked");
 			return;
 		}
-		// Create a region lock object for this region.
-		RegionLock regionLock = new RegionLock();
-		regionLock.setRegionId(region.getId());
+		// Lock the region.
+		region.setLocked(true);
 		// Create locked player and saved item objects.
+		World world = this.getWorld(region.getWorldId());
 		List<LockedPlayer> lockedPlayers = new ArrayList<LockedPlayer>();
 		List<SavedItem> savedItems = new ArrayList<SavedItem>();
-		World world = this.getServer().getWorld(region.getWorld());
 		List<Player> worldPlayers = world.getPlayers();
 		for (Player worldPlayer : worldPlayers) {
 			if (this.regionContainsPlayer(region, worldPlayer)) {
@@ -224,7 +223,7 @@ public class RegionControl extends JavaPlugin {
 			// Begin transaction.
 			db.beginTransaction();
 			// Set the region lock.
-			db.save(regionLock);
+			db.update(region);
 			// Save the locked players.
 			if (lockedPlayers.size() > 0) db.save(lockedPlayers);
 			// Save the player's inventory items.
@@ -258,11 +257,12 @@ public class RegionControl extends JavaPlugin {
 			return;
 		}
 		// Check current region status.
-		List<RegionLock> regionLocks = db.find(RegionLock.class).where().eq("regionId", region.getId()).findList();
-		if (regionLocks.size() == 0) {
+		if (!region.getLocked()) {
 			player.sendMessage("region is not locked");
 			return;
 		}
+		// Unlock the region.
+		region.setLocked(false);
 		// Get all locked players for this region.
 		List<LockedPlayer> lockedPlayers = db.find(LockedPlayer.class).where().eq("regionId", region.getId()).findList();
 		List<SavedItem> allSavedItems = new ArrayList<SavedItem>();
@@ -292,7 +292,7 @@ public class RegionControl extends JavaPlugin {
 			// Delete the locked player records.
 			if (lockedPlayers.size() > 0) db.delete(lockedPlayers);
 			// Remove the region lock.
-			db.delete(regionLocks);
+			db.update(region);
 			// Commit transaction.
 			db.commitTransaction();
 			player.sendMessage("region unlocked");
@@ -459,7 +459,7 @@ public class RegionControl extends JavaPlugin {
 		Vector min = selection.getMinimumPoint();
 		// create new controlled region
 		ControlledRegion region = new ControlledRegion();
-		region.setWorld(player.getWorld().getName());
+		region.setWorldId(player.getWorld().getId());
 		region.setName(name);
 		region.setMaxX((int)max.getX());
 		region.setMaxY((int)max.getY());
@@ -467,6 +467,7 @@ public class RegionControl extends JavaPlugin {
 		region.setMinX((int)min.getX());
 		region.setMinY((int)min.getY());
 		region.setMinZ((int)min.getZ());
+		region.setLocked(false);
 		region.setSnapshotId(0); // no current snapshot
 		region.setMaxPlayers(0); // unlimited players
 		// Save the new controlled region record.
@@ -519,7 +520,7 @@ public class RegionControl extends JavaPlugin {
 			return;
 		}
 		// Do not allow delete of locked region.
-		if (this.isRegionLocked(region)) {
+		if (region.getLocked()) {
 			player.sendMessage("the region is locked");
 			return;
 		}
@@ -557,7 +558,7 @@ public class RegionControl extends JavaPlugin {
 			return;
 		}
 		// Display world.
-		player.sendMessage("world = " + region.getWorld());
+		player.sendMessage("world = " + this.getWorld(region.getWorldId()).getName());
 		// Display region bounds.
 		player.sendMessage("max = (" + Double.toString(region.getMaxX()) + ", " + Double.toString(region.getMaxY()) + ", " + Double.toString(region.getMaxZ()) + ")");
 		player.sendMessage("min = (" + Double.toString(region.getMinX()) + ", " + Double.toString(region.getMinY()) + ", " + Double.toString(region.getMinZ()) + ")");
@@ -572,7 +573,7 @@ public class RegionControl extends JavaPlugin {
 			player.sendMessage("no snapshots");
 		}
 		// Display region locked status.
-		if (this.isRegionLocked(region)){
+		if (region.getLocked()){
 			player.sendMessage("region is locked");
 		}else{
 			player.sendMessage("region is not locked");
@@ -611,14 +612,6 @@ public class RegionControl extends JavaPlugin {
 		return region;
 	}
 	
-	/*
-	 * Indicates whether a controlled region is locked.
-	 * @param region - The region.
-	 */
-	private Boolean isRegionLocked(ControlledRegion region) {
-		return (this.getDatabase().find(RegionLock.class).where().eq("regionId", region.getId()).findRowCount() > 0);
-	}
-	
     /*
      * Ensures that the database for this plugin is installed and available.
      */
@@ -647,7 +640,6 @@ public class RegionControl extends JavaPlugin {
 		list.add(ControlledRegion.class);
 		list.add(LockedPlayer.class);
 		list.add(RegionItem.class);
-		list.add(RegionLock.class);
 		list.add(RegionSnapshot.class);
 		list.add(SavedBlock.class);
 		list.add(SavedItem.class);
@@ -750,5 +742,15 @@ public class RegionControl extends JavaPlugin {
 		}
 	}
 
+	/*
+	 * Gets a world by id.
+	 * TODO: Add a hash map for better performance? List should always be short.
+	 */
+	private World getWorld(long worldId) {
+		for (World world : this.getServer().getWorlds()) {
+			if (world.getId() == worldId) return world;
+		}
+		return null;
+	}
 
 }
