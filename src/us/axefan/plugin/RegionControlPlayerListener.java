@@ -22,10 +22,10 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 	
 	public void onPlayerMove(PlayerMoveEvent event) {
 		// Check all region locks in current world.
-		// TODO: Store chunk ids for faster lookup.
+		// TODO: Store chunk ids for better performance.
 		EbeanServer db = plugin.getDatabase();
 		Player player = event.getPlayer();
-		List<ControlledRegion> regions = db.find(ControlledRegion.class).where().eq("worldId", player.getWorld().getId()).findList();
+		List<ControlledRegion> regions = db.find(ControlledRegion.class).where().eq("worldName", player.getWorld().getName()).findList();
 		if (regions.size() == 0) return;
 		for (ControlledRegion region : regions) {
 			// Check if player is trying to cross region bounds.
@@ -37,13 +37,12 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 				// Player is trying to leave the region.
 				if (region.getLocked()) {
 					this.preventPlayerMove(event);
-					// TODO: Add ControlledRegion.noLeaveMessage.
-					player.sendMessage("You cannot leave this region!");
+					player.sendMessage(region.getNoLeaveMessage());
 					return;
 				}else{
-					// TODO: Add inventory control for unlocked regions.
-					// TODO: Add ControlledRegion.leaveMessage.
-					player.sendMessage("Restore inventory if enabled.");
+					// TODO: Add inventory control.
+					String msg = region.getLeaveMessage();
+					if (msg.length() > 0) player.sendMessage(msg);
 					region.setCurrentPlayers(region.getCurrentPlayers()-1);
 					db.update(region);
 					return;
@@ -53,8 +52,7 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 				if (region.getLocked()) {
 					// Region is locked
 					this.preventPlayerMove(event);
-					// TODO: Add ControlledRegion.noEnterMessage.
-					player.sendMessage("You cannot enter this region!");
+					player.sendMessage(region.getNoEnterMessage());
 					return;
 				}else{
 					// Check max players.
@@ -64,9 +62,9 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 						this.preventPlayerMove(event);
 						return;
 					}
-					// TODO: Add inventory control for unlocked regions.
-					// TODO: Add ControlledRegion.enterMessage.
-					player.sendMessage("Save and set inventory if enabled.");
+					// TODO: Add inventory control.
+					String msg = region.getEnterMessage();
+					if (msg.length() > 0) player.sendMessage(msg);
 					region.setCurrentPlayers(region.getCurrentPlayers()+1);
 					db.update(region);
 					return;

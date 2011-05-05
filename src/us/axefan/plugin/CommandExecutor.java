@@ -39,7 +39,16 @@ public class CommandExecutor implements org.bukkit.command.CommandExecutor {
 				player.sendMessage("/rc update <name> <field> <value>");
 				return true;
 			}
-			this.plugin.update(player, args[1].trim(), args[2].trim(), args[3].trim());
+			String arg3;
+			if (args.length == 4) {
+				arg3 = args[3];
+			}else{
+				arg3 = "";
+				for (int i=3; i<args.length; i++){
+					arg3 += args[i] + " ";
+				}
+			}
+			this.plugin.update(player, args[1].trim(), args[2].trim(), arg3.trim());
 			return true;
 		}else if (action.equals("delete")) {
 			if (args.length < 2) {

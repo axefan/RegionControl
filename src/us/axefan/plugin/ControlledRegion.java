@@ -38,25 +38,43 @@ public class ControlledRegion {
     private int minZ;
     
     @NotNull
-    private int snapshotId;
+    private int snapshotId = 0;
     
     @NotNull
-    private Boolean locked;
+    private Boolean locked = false;
     
     @NotNull
-    private int maxPlayers; // -1 = no limit
+    private int maxPlayers = -1; // -1 = no limit
     
     @NotNull
-    private int minPlayers; // -1 = no limit
+    private int minPlayers = 0; // 0 = no limit
     
     @NotNull
     private int currentPlayers;
     
     @NotNull
-    private String maxMessage; // default = "no more players allowed"
+    private String maxMessage = "no more players allowed";
     
     @NotNull
-    private String minMessage; // default = "waiting for more players"
+    private String minMessage = "waiting for more players";
+    
+    @NotNull
+    private String enterMessage = "";
+    
+    @NotNull
+    private String leaveMessage = "";
+    
+    @NotNull
+    private String noEnterMessage = "You cannot enter this area!";
+    
+    @NotNull
+    private String noLeaveMessage = "You cannot leave this area!";
+    
+    @NotNull
+    private int lockHealth = 0; // 0 = no change, range = 0 - 20
+    
+    @NotNull
+    private int unlockHealth = 0; // 0 = no change, range = 0 - 20
     
     // TODO: Add ControlledRegion.failSpawn point (for kick from controlled region - death on ControlledRegion.maxTries, on reload).
     // TODO: Add ControlledRegion.retrySpawn point (for reset after death when less than ControlledRegion.maxTries.
@@ -191,6 +209,54 @@ public class ControlledRegion {
 
 	public String getWorldName() {
 		return worldName;
+	}
+
+	public void setEnterMessage(String enterMessage) {
+		this.enterMessage = enterMessage;
+	}
+
+	public String getEnterMessage() {
+		return enterMessage;
+	}
+
+	public void setLeaveMessage(String leaveMessage) {
+		this.leaveMessage = leaveMessage;
+	}
+
+	public String getLeaveMessage() {
+		return leaveMessage;
+	}
+
+	public void setNoEnterMessage(String noEnterMessage) {
+		this.noEnterMessage = noEnterMessage;
+	}
+
+	public String getNoEnterMessage() {
+		return noEnterMessage;
+	}
+
+	public void setNoLeaveMessage(String noLeaveMessage) {
+		this.noLeaveMessage = noLeaveMessage;
+	}
+
+	public String getNoLeaveMessage() {
+		return noLeaveMessage;
+	}
+
+	public void setLockHealth(int lockHealth) {
+		this.lockHealth = lockHealth;
+	}
+
+	public int getLockHealth() {
+		return lockHealth;
+	}
+
+	public void setUnlockHealth(int unlockHealth) {
+		this.unlockHealth = unlockHealth;
+	}
+
+	public int getUnlockHealth() {
+		return unlockHealth;
 	}
 	
 }

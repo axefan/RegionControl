@@ -211,15 +211,15 @@ public class RegionControl extends JavaPlugin {
 				if (leggings != null) savedItems.add(this.createSavedItem(leggings, regionPlayer, 3));
 				ItemStack boots = inventory.getBoots();
 				if (boots != null) savedItems.add(this.createSavedItem(boots, regionPlayer, 4));
-				// Clear the player's inventory.
-				inventory.clear(); // TODO: Use clearInventory option.
+				// TODO: Set the player's inventory.
+				inventory.clear(); 
 				inventory.setHelmet(null);
 				inventory.setChestplate(null);
 				inventory.setLeggings(null);
 				inventory.setBoots(null);
-				// TODO: Give any region items to the player.
 				// Set player health.
-				player.setHealth(20); // TODO: Make initialHealth region setting.
+				int lockHealth = region.getLockHealth();
+				if (lockHealth > 0) player.setHealth(lockHealth);
 		}
 		// Write records.
 		try {
@@ -284,7 +284,8 @@ public class RegionControl extends JavaPlugin {
 				this.restoreInventoryItem(savedItem, inventory);
 			}
 			// Restore player's health.
-			player.setHealth(20); // TODO: Make restoreHealth(bool) leaveHealth(int) region settings.
+			int unlockHealth = region.getUnlockHealth();
+			if (unlockHealth > 0) player.setHealth(unlockHealth);
 		}
 		// Delete records.
 		try {
@@ -470,13 +471,7 @@ public class RegionControl extends JavaPlugin {
 		region.setMinX((int)min.getX());
 		region.setMinY((int)min.getY());
 		region.setMinZ((int)min.getZ());
-		region.setLocked(false);
-		region.setSnapshotId(0); // no current snapshot
-		region.setMaxPlayers(-1); // no limit.
-		region.setMinPlayers(-1); // no limit.
 		region.setCurrentPlayers(this.getPlayersInRegion(region).size());
-		region.setMaxMessage("no more players allowed");
-		region.setMinMessage("waiting for more players");
 		// Save the new controlled region record.
 		db.save(region);
 		player.sendMessage("region created");
@@ -526,6 +521,14 @@ public class RegionControl extends JavaPlugin {
 			region.setMinMessage(value);
 		}else if(setting.equalsIgnoreCase("maxMessage")) {
 			region.setMaxMessage(value);
+		}else if(setting.equalsIgnoreCase("enterMessage")) {
+			region.setEnterMessage(value);
+		}else if(setting.equalsIgnoreCase("leaveMessage")) {
+			region.setLeaveMessage(value);
+		}else if(setting.equalsIgnoreCase("noEnterMessage")) {
+			region.setNoEnterMessage(value);
+		}else if(setting.equalsIgnoreCase("noLeaveMessage")) {
+			region.setNoLeaveMessage(value);
 		}else{
 			player.sendMessage("no such setting: " + setting);
 			return;
@@ -619,7 +622,6 @@ public class RegionControl extends JavaPlugin {
 			player.sendMessage("minPlayers = " + region.getMinPlayers());
 		}
 		player.sendMessage("currentPlayers = " + region.getCurrentPlayers());
-		// TODO: Display locked player info.
 	}
 	
 	/*
@@ -634,7 +636,6 @@ public class RegionControl extends JavaPlugin {
 		if (regions.size() == 0) message.append("no regions defined");
 		for (ControlledRegion region : regions){
 			message.append(region.getName());
-			// TODO: Add locked status and num players.
 			if (region != regions.get(regions.size()-1)) message.append(", ");
 		}		
 		player.sendMessage(message.toString());
@@ -744,9 +745,7 @@ public class RegionControl extends JavaPlugin {
 		ItemStack item = new ItemStack(typeId, 1);
 		item.setDurability(savedItem.getDurability());
 		item.setAmount(savedItem.getAmount());
-		if (savedItem.getData() == 0){
-			item.setData(null);
-		}else{
+		if (savedItem.getData() != 0){
 			item.setData(new MaterialData(typeId, savedItem.getData()));
 		}
 		return item;
@@ -783,17 +782,6 @@ public class RegionControl extends JavaPlugin {
 		}
 	}
 
-	/*
-	 * Gets a world by id.
-	 * TODO: Add a hash map for better performance? List should always be short.
-	 */
-	private World getWorld(long worldId) {
-		for (World world : this.getServer().getWorlds()) {
-			if (world.getId() == worldId) return world;
-		}
-		return null;
-	}
-	
 	/*
 	 * Gets a list of all player in the specified region.
 	 * @param region - The region.
