@@ -14,10 +14,10 @@ public class ControlledRegion {
     private int id;
     
     @NotNull
-    private long worldId;
+    private String name;
     
     @NotNull
-    private String name;
+    private String worldName;
     
     @NotNull
     private int maxX;
@@ -44,11 +44,26 @@ public class ControlledRegion {
     private Boolean locked;
     
     @NotNull
-    private int maxPlayers;
+    private int maxPlayers; // -1 = no limit
+    
+    @NotNull
+    private int minPlayers; // -1 = no limit
+    
+    @NotNull
+    private int currentPlayers;
+    
+    @NotNull
+    private String maxMessage; // default = "no more players allowed"
+    
+    @NotNull
+    private String minMessage; // default = "waiting for more players"
     
     // TODO: Add ControlledRegion.failSpawn point (for kick from controlled region - death on ControlledRegion.maxTries, on reload).
     // TODO: Add ControlledRegion.retrySpawn point (for reset after death when less than ControlledRegion.maxTries.
-    // TODO: Add ControlledRegion.maxTries & LockedPlayer.tries (number of deaths before kick to ControlledRegion.failSpawn).
+    // TODO: Add ControlledRegion.lives & LockedPlayer.lives (number of deaths before kick to ControlledRegion.failSpawn).
+    // TODO: Add ControlledRegion.lockOnMaxPlayers
+    // TODO: Add ControlledRegion.setInventoryMessage
+    // TODO: Add ControlledRegion.restoreInventoryMessage
     
 	public void setId(int id) {
 		this.id = id;
@@ -122,22 +137,6 @@ public class ControlledRegion {
 		return snapshotId;
 	}
 
-	public void setMaxPlayers(int maxPlayers) {
-		this.maxPlayers = maxPlayers;
-	}
-
-	public int getMaxPlayers() {
-		return maxPlayers;
-	}
-
-	public void setWorldId(long worldId) {
-		this.worldId = worldId;
-	}
-
-	public long getWorldId() {
-		return worldId;
-	}
-
 	public void setLocked(Boolean locked) {
 		this.locked = locked;
 	}
@@ -146,12 +145,52 @@ public class ControlledRegion {
 		return locked;
 	}
 
-//	public void setWorld(String world) {
-//		this.world = world;
-//	}
-//
-//	public String getWorld() {
-//		return world;
-//	}
+	public void setMaxPlayers(int maxPlayers) {
+		this.maxPlayers = maxPlayers;
+	}
+
+	public int getMaxPlayers() {
+		return maxPlayers;
+	}
+
+	public void setMinPlayers(int minPlayers) {
+		this.minPlayers = minPlayers;
+	}
+
+	public int getMinPlayers() {
+		return minPlayers;
+	}
+
+	public void setCurrentPlayers(int currentPlayers) {
+		this.currentPlayers = currentPlayers;
+	}
+
+	public int getCurrentPlayers() {
+		return currentPlayers;
+	}
+
+	public void setMaxMessage(String maxMessage) {
+		this.maxMessage = maxMessage;
+	}
+
+	public String getMaxMessage() {
+		return maxMessage;
+	}
+
+	public void setMinMessage(String minMessage) {
+		this.minMessage = minMessage;
+	}
+
+	public String getMinMessage() {
+		return minMessage;
+	}
+
+	public void setWorldName(String worldName) {
+		this.worldName = worldName;
+	}
+
+	public String getWorldName() {
+		return worldName;
+	}
 	
 }

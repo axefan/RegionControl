@@ -1,6 +1,6 @@
 name: RegionControl
 main: us.axefan.plugin.RegionControl
-version: 0.2
+version: 0.3
 author: axefan
 database: true
 description: Save and restore region contents and player inventory based on conditions and events.

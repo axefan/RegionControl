@@ -37,22 +37,38 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 				// Player is trying to leave the region.
 				if (region.getLocked()) {
 					this.preventPlayerMove(event);
+					// TODO: Add ControlledRegion.noLeaveMessage.
 					player.sendMessage("You cannot leave this region!");
 					return;
 				}else{
 					// TODO: Add inventory control for unlocked regions.
+					// TODO: Add ControlledRegion.leaveMessage.
 					player.sendMessage("Restore inventory if enabled.");
-					return;					
+					region.setCurrentPlayers(region.getCurrentPlayers()-1);
+					db.update(region);
+					return;
 				}
 			}else{
 				// Player is trying to enter the region.
 				if (region.getLocked()) {
+					// Region is locked
 					this.preventPlayerMove(event);
+					// TODO: Add ControlledRegion.noEnterMessage.
 					player.sendMessage("You cannot enter this region!");
 					return;
 				}else{
+					// Check max players.
+					if (region.getMaxPlayers() >= 0 && region.getCurrentPlayers() == region.getMaxPlayers()) {
+						// No more players allowed.
+						player.sendMessage(region.getMaxMessage());
+						this.preventPlayerMove(event);
+						return;
+					}
 					// TODO: Add inventory control for unlocked regions.
+					// TODO: Add ControlledRegion.enterMessage.
 					player.sendMessage("Save and set inventory if enabled.");
+					region.setCurrentPlayers(region.getCurrentPlayers()+1);
+					db.update(region);
 					return;
 				}
 			}

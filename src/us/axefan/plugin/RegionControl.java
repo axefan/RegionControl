@@ -137,7 +137,7 @@ public class RegionControl extends JavaPlugin {
 		RegionSnapshot snapshot = snapshots.get(frameNumber-1);
 		// Restore the blocks for this snapshot.
 		EbeanServer db = this.getDatabase();
-		World world = this.getWorld(region.getWorldId());
+		World world = this.getServer().getWorld(region.getWorldName());
 		List<SavedBlock> savedBlocks = db.find(SavedBlock.class).where().eq("snapshotId", snapshot.getId()).orderBy("id").findList();
 		for (SavedBlock savedBlock : savedBlocks) {
 			Block block = world.getBlockAt(savedBlock.getX(), savedBlock.getY(), savedBlock.getZ());
@@ -178,35 +178,39 @@ public class RegionControl extends JavaPlugin {
 			player.sendMessage("region is already locked");
 			return;
 		}
+		// Check minPlayers
+		if (region.getCurrentPlayers() < region.getMinPlayers()) {
+			// Not enough players.
+			player.sendMessage(region.getMinMessage());
+			return;
+		}
 		// Lock the region.
 		region.setLocked(true);
 		// Create locked player and saved item objects.
-		World world = this.getWorld(region.getWorldId());
 		List<LockedPlayer> lockedPlayers = new ArrayList<LockedPlayer>();
 		List<SavedItem> savedItems = new ArrayList<SavedItem>();
-		List<Player> worldPlayers = world.getPlayers();
-		for (Player worldPlayer : worldPlayers) {
-			if (this.regionContainsPlayer(region, worldPlayer)) {
+		List<Player> regionPlayers = this.getPlayersInRegion(region);
+		for (Player regionPlayer : regionPlayers) {
 				LockedPlayer lockedPlayer = new LockedPlayer();
-				lockedPlayer.setName(worldPlayer.getName());
+				lockedPlayer.setName(regionPlayer.getName());
 				lockedPlayer.setRegionId(region.getId());
 				lockedPlayer.setHealth(player.getHealth());
 				lockedPlayers.add(lockedPlayer);
 				// Create saved item objects for inventory.
-				PlayerInventory inventory = worldPlayer.getInventory();
+				PlayerInventory inventory = regionPlayer.getInventory();
 				for (ItemStack item : inventory.getContents()) {
 					if (item != null && item.getTypeId() != 0) {
-						savedItems.add(this.createSavedItem(item, worldPlayer, 0));
+						savedItems.add(this.createSavedItem(item, regionPlayer, 0));
 					}
 				}
 				ItemStack helmet = inventory.getHelmet();
-				if (helmet != null) savedItems.add(this.createSavedItem(helmet, worldPlayer, 1));
+				if (helmet != null) savedItems.add(this.createSavedItem(helmet, regionPlayer, 1));
 				ItemStack chestPlate = inventory.getChestplate();
-				if (chestPlate != null) savedItems.add(this.createSavedItem(chestPlate, worldPlayer, 2));
+				if (chestPlate != null) savedItems.add(this.createSavedItem(chestPlate, regionPlayer, 2));
 				ItemStack leggings = inventory.getLeggings();
-				if (leggings != null) savedItems.add(this.createSavedItem(leggings, worldPlayer, 3));
+				if (leggings != null) savedItems.add(this.createSavedItem(leggings, regionPlayer, 3));
 				ItemStack boots = inventory.getBoots();
-				if (boots != null) savedItems.add(this.createSavedItem(boots, worldPlayer, 4));
+				if (boots != null) savedItems.add(this.createSavedItem(boots, regionPlayer, 4));
 				// Clear the player's inventory.
 				inventory.clear(); // TODO: Use clearInventory option.
 				inventory.setHelmet(null);
@@ -216,7 +220,6 @@ public class RegionControl extends JavaPlugin {
 				// TODO: Give any region items to the player.
 				// Set player health.
 				player.setHealth(20); // TODO: Make initialHealth region setting.
-			}
 		}
 		// Write records.
 		try {
@@ -459,7 +462,7 @@ public class RegionControl extends JavaPlugin {
 		Vector min = selection.getMinimumPoint();
 		// create new controlled region
 		ControlledRegion region = new ControlledRegion();
-		region.setWorldId(player.getWorld().getId());
+		region.setWorldName(player.getWorld().getName());
 		region.setName(name);
 		region.setMaxX((int)max.getX());
 		region.setMaxY((int)max.getY());
@@ -469,7 +472,11 @@ public class RegionControl extends JavaPlugin {
 		region.setMinZ((int)min.getZ());
 		region.setLocked(false);
 		region.setSnapshotId(0); // no current snapshot
-		region.setMaxPlayers(0); // unlimited players
+		region.setMaxPlayers(-1); // no limit.
+		region.setMinPlayers(-1); // no limit.
+		region.setCurrentPlayers(this.getPlayersInRegion(region).size());
+		region.setMaxMessage("no more players allowed");
+		region.setMinMessage("waiting for more players");
 		// Save the new controlled region record.
 		db.save(region);
 		player.sendMessage("region created");
@@ -497,6 +504,28 @@ public class RegionControl extends JavaPlugin {
 				return;
 			}
 			region.setName(value);
+		}else if(setting.equalsIgnoreCase("maxPlayers")) {
+			int maxPlayers;
+			try{
+				maxPlayers = Integer.parseInt(value);
+			}catch(Exception ex){
+				player.sendMessage(setting + " must be an integer!");
+				return;
+			}
+			region.setMaxPlayers(maxPlayers);
+		}else if(setting.equalsIgnoreCase("minPlayers")) {
+			int minPlayers;
+			try{
+				minPlayers = Integer.parseInt(value);
+			}catch(Exception ex){
+				player.sendMessage(setting + " must be an integer!");
+				return;
+			}
+			region.setMinPlayers(minPlayers);
+		}else if(setting.equalsIgnoreCase("minMessage")) {
+			region.setMinMessage(value);
+		}else if(setting.equalsIgnoreCase("maxMessage")) {
+			region.setMaxMessage(value);
 		}else{
 			player.sendMessage("no such setting: " + setting);
 			return;
@@ -558,7 +587,7 @@ public class RegionControl extends JavaPlugin {
 			return;
 		}
 		// Display world.
-		player.sendMessage("world = " + this.getWorld(region.getWorldId()).getName());
+		player.sendMessage("world = " + region.getWorldName());
 		// Display region bounds.
 		player.sendMessage("max = (" + Double.toString(region.getMaxX()) + ", " + Double.toString(region.getMaxY()) + ", " + Double.toString(region.getMaxZ()) + ")");
 		player.sendMessage("min = (" + Double.toString(region.getMinX()) + ", " + Double.toString(region.getMinY()) + ", " + Double.toString(region.getMinZ()) + ")");
@@ -578,7 +607,19 @@ public class RegionControl extends JavaPlugin {
 		}else{
 			player.sendMessage("region is not locked");
 		}
-		// TODO: Display region player info.
+		// Display max and min players info.
+		if (region.getMaxPlayers() < 0){
+			player.sendMessage("maxPlayers = no limit");
+		}else{
+			player.sendMessage("maxPlayers = " + region.getMaxPlayers());
+		}
+		if (region.getMinPlayers() < 0){
+			player.sendMessage("minPlayers = no limit");
+		}else{
+			player.sendMessage("minPlayers = " + region.getMinPlayers());
+		}
+		player.sendMessage("currentPlayers = " + region.getCurrentPlayers());
+		// TODO: Display locked player info.
 	}
 	
 	/*
@@ -751,6 +792,22 @@ public class RegionControl extends JavaPlugin {
 			if (world.getId() == worldId) return world;
 		}
 		return null;
+	}
+	
+	/*
+	 * Gets a list of all player in the specified region.
+	 * @param region - The region.
+	 */
+	private List<Player> getPlayersInRegion(ControlledRegion region) {
+		World world = this.getServer().getWorld(region.getWorldName());
+		List<Player> regionPlayers = new ArrayList<Player>();
+		List<Player> worldPlayers = world.getPlayers();
+		for (Player worldPlayer : worldPlayers) {
+			if (this.regionContainsPlayer(region, worldPlayer)) {
+				regionPlayers.add(worldPlayer);
+			}
+		}
+		return regionPlayers;
 	}
 
 }
