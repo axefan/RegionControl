@@ -44,37 +44,49 @@ public class ControlledRegion {
     private Boolean locked = false;
     
     @NotNull
-    private int maxPlayers = -1; // -1 = no limit
+    private int maxPlayers = -1; // -1 = no limit, alias = maxp
     
     @NotNull
-    private int minPlayers = 0; // 0 = no limit
+    private int minPlayers = 0; // alias = minp
     
     @NotNull
     private int currentPlayers;
     
     @NotNull
-    private String maxMessage = "no more players allowed";
+    private int lockHealth = 0; // 0 = no change, range = 0 - 20, alias = lh
     
     @NotNull
-    private String minMessage = "waiting for more players";
+    private int unlockHealth = 0; // 0 = no change, range = 0 - 20, alias = uh
     
     @NotNull
-    private String enterMessage = "";
+    private int setInventory = 0; // 0 = no change, 1 = on enter, 2 = on lock, alias = si
     
     @NotNull
-    private String leaveMessage = "";
+    private int restoreInventory = 0; // 0 = no change, 1 = on leave, 2 = on unlock, alias = ri
     
     @NotNull
-    private String noEnterMessage = "You cannot enter this area!";
+    private String maxMessage = "no more players allowed"; // alias = minm
     
     @NotNull
-    private String noLeaveMessage = "You cannot leave this area!";
+    private String minMessage = "waiting for more players"; // alias = maxm
     
     @NotNull
-    private int lockHealth = 0; // 0 = no change, range = 0 - 20
+    private String enterMessage = ""; // alias = em
     
     @NotNull
-    private int unlockHealth = 0; // 0 = no change, range = 0 - 20
+    private String leaveMessage = ""; // alias = lm
+    
+    @NotNull
+    private String noEnterMessage = "You cannot enter this area!"; // alias = nem
+    
+    @NotNull
+    private String noLeaveMessage = "You cannot leave this area!"; // alias = nlm
+    
+    @NotNull
+    private String setInventoryMessage = ""; // alias = sim
+    
+    @NotNull
+    private String restoreInventoryMessage = ""; // alias = rim
     
     // TODO: Add ControlledRegion.failSpawn point (for kick from controlled region - death on ControlledRegion.maxTries, on reload).
     // TODO: Add ControlledRegion.retrySpawn point (for reset after death when less than ControlledRegion.maxTries.
@@ -257,6 +269,38 @@ public class ControlledRegion {
 
 	public int getUnlockHealth() {
 		return unlockHealth;
+	}
+
+	public void setSetInventory(int setInventory) {
+		this.setInventory = setInventory;
+	}
+
+	public int getSetInventory() {
+		return setInventory;
+	}
+
+	public void setRestoreInventory(int restoreInventory) {
+		this.restoreInventory = restoreInventory;
+	}
+
+	public int getRestoreInventory() {
+		return restoreInventory;
+	}
+
+	public void setSetInventoryMessage(String setInventoryMessage) {
+		this.setInventoryMessage = setInventoryMessage;
+	}
+
+	public String getSetInventoryMessage() {
+		return setInventoryMessage;
+	}
+
+	public void setRestoreInventoryMessage(String restoreInventoryMessage) {
+		this.restoreInventoryMessage = restoreInventoryMessage;
+	}
+
+	public String getRestoreInventoryMessage() {
+		return restoreInventoryMessage;
 	}
 	
 }

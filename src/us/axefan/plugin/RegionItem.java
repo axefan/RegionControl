@@ -20,10 +20,13 @@ public class RegionItem {
     private int typeId;
     
     @NotNull
+    private int category; // 0 = item, 1 = helmet, 2 = chest plate, 3 = leggings, 4 = boots
+    
+    @NotNull
     private short durability;
     
     @NotNull
-    private short amount;
+    private int amount;
     
     @NotNull
     private byte data;
@@ -60,11 +63,11 @@ public class RegionItem {
 		return durability;
 	}
 
-	public void setAmount(short amount) {
+	public void setAmount(int amount) {
 		this.amount = amount;
 	}
 
-	public short getAmount() {
+	public int getAmount() {
 		return amount;
 	}
 
@@ -74,6 +77,14 @@ public class RegionItem {
 
 	public byte getData() {
 		return data;
+	}
+
+	public void setCategory(int category) {
+		this.category = category;
+	}
+
+	public int getCategory() {
+		return category;
 	}
 
 }

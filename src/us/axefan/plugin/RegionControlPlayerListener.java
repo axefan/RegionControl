@@ -40,9 +40,14 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 					player.sendMessage(region.getNoLeaveMessage());
 					return;
 				}else{
-					// TODO: Add inventory control.
+					// Send player message.
 					String msg = region.getLeaveMessage();
 					if (msg.length() > 0) player.sendMessage(msg);
+					// Restore player inventory.
+					if (region.getRestoreInventory() == 1) {
+						db.delete(plugin.restoreInventory(player, region));
+					}
+					// Decrement current players.
 					region.setCurrentPlayers(region.getCurrentPlayers()-1);
 					db.update(region);
 					return;
@@ -62,9 +67,15 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 						this.preventPlayerMove(event);
 						return;
 					}
-					// TODO: Add inventory control.
+					// Send player message.
 					String msg = region.getEnterMessage();
 					if (msg.length() > 0) player.sendMessage(msg);
+					// Set player inventory.
+					if (region.getSetInventory() == 1) {
+						db.save(plugin.saveInventory(player, region));
+						plugin.setInventory(player, region);
+					}
+					// Increment current players.
 					region.setCurrentPlayers(region.getCurrentPlayers()+1);
 					db.update(region);
 					return;

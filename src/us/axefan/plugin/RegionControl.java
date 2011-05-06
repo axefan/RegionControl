@@ -53,6 +53,7 @@ public class RegionControl extends JavaPlugin {
 			if (this.worldEditApi != null) System.out.println(desc.getName() + " is hooked into WorldEdit");
 		}
 		this.setupDatabase();
+		// TODO: Unlock all controlled regions - if server crashes and leaves bogus records.
         System.out.println(desc.getName() + " " + desc.getVersion() + " enabled");
 	}
 	
@@ -191,35 +192,19 @@ public class RegionControl extends JavaPlugin {
 		List<SavedItem> savedItems = new ArrayList<SavedItem>();
 		List<Player> regionPlayers = this.getPlayersInRegion(region);
 		for (Player regionPlayer : regionPlayers) {
-				LockedPlayer lockedPlayer = new LockedPlayer();
-				lockedPlayer.setName(regionPlayer.getName());
-				lockedPlayer.setRegionId(region.getId());
-				lockedPlayer.setHealth(player.getHealth());
-				lockedPlayers.add(lockedPlayer);
-				// Create saved item objects for inventory.
-				PlayerInventory inventory = regionPlayer.getInventory();
-				for (ItemStack item : inventory.getContents()) {
-					if (item != null && item.getTypeId() != 0) {
-						savedItems.add(this.createSavedItem(item, regionPlayer, 0));
-					}
-				}
-				ItemStack helmet = inventory.getHelmet();
-				if (helmet != null) savedItems.add(this.createSavedItem(helmet, regionPlayer, 1));
-				ItemStack chestPlate = inventory.getChestplate();
-				if (chestPlate != null) savedItems.add(this.createSavedItem(chestPlate, regionPlayer, 2));
-				ItemStack leggings = inventory.getLeggings();
-				if (leggings != null) savedItems.add(this.createSavedItem(leggings, regionPlayer, 3));
-				ItemStack boots = inventory.getBoots();
-				if (boots != null) savedItems.add(this.createSavedItem(boots, regionPlayer, 4));
-				// TODO: Set the player's inventory.
-				inventory.clear(); 
-				inventory.setHelmet(null);
-				inventory.setChestplate(null);
-				inventory.setLeggings(null);
-				inventory.setBoots(null);
-				// Set player health.
-				int lockHealth = region.getLockHealth();
-				if (lockHealth > 0) player.setHealth(lockHealth);
+			LockedPlayer lockedPlayer = new LockedPlayer();
+			lockedPlayer.setName(regionPlayer.getName());
+			lockedPlayer.setRegionId(region.getId());
+			lockedPlayer.setHealth(regionPlayer.getHealth());
+			lockedPlayers.add(lockedPlayer);
+			// Set the player's inventory.
+			if (region.getSetInventory() == 2) {
+				savedItems.addAll(this.saveInventory(regionPlayer, region));
+				this.setInventory(regionPlayer, region);
+			}
+			// Set player health.
+			int lockHealth = region.getLockHealth();
+			if (lockHealth > 0) regionPlayer.setHealth(lockHealth);
 		}
 		// Write records.
 		try {
@@ -268,31 +253,23 @@ public class RegionControl extends JavaPlugin {
 		region.setLocked(false);
 		// Get all locked players for this region.
 		List<LockedPlayer> lockedPlayers = db.find(LockedPlayer.class).where().eq("regionId", region.getId()).findList();
-		List<SavedItem> allSavedItems = new ArrayList<SavedItem>();
+		List<SavedItem> savedItems = new ArrayList<SavedItem>();
 		for (LockedPlayer lockedPlayer : lockedPlayers) {
 			// Restore player's inventory.
 			Player regionPlayer = this.getServer().getPlayer(lockedPlayer.getName());
-			PlayerInventory inventory = regionPlayer.getInventory();
-			inventory.clear();
-			inventory.setHelmet(null);
-			inventory.setChestplate(null);
-			inventory.setLeggings(null);
-			inventory.setBoots(null);
-			List<SavedItem> savedItems = db.find(SavedItem.class).where().eq("playerName", player.getName()).findList();
-			allSavedItems.addAll(savedItems);
-			for (SavedItem savedItem : savedItems) {
-				this.restoreInventoryItem(savedItem, inventory);
+			if (region.getRestoreInventory() == 2) {
+				savedItems.addAll(this.restoreInventory(regionPlayer, region));
 			}
 			// Restore player's health.
 			int unlockHealth = region.getUnlockHealth();
-			if (unlockHealth > 0) player.setHealth(unlockHealth);
+			if (unlockHealth > 0) regionPlayer.setHealth(unlockHealth);
 		}
 		// Delete records.
 		try {
 			// Begin transaction.
 			db.beginTransaction();
 			// Delete the player's saved inventory records.
-			if (allSavedItems.size() > 0) db.delete(allSavedItems);
+			if (savedItems.size() > 0) db.delete(savedItems);
 			// Delete the locked player records.
 			if (lockedPlayers.size() > 0) db.delete(lockedPlayers);
 			// Remove the region lock.
@@ -499,7 +476,7 @@ public class RegionControl extends JavaPlugin {
 				return;
 			}
 			region.setName(value);
-		}else if(setting.equalsIgnoreCase("maxPlayers")) {
+		}else if(setting.equalsIgnoreCase("maxPlayers") || setting.equalsIgnoreCase("maxp")) {
 			int maxPlayers;
 			try{
 				maxPlayers = Integer.parseInt(value);
@@ -507,8 +484,12 @@ public class RegionControl extends JavaPlugin {
 				player.sendMessage(setting + " must be an integer!");
 				return;
 			}
+			if (maxPlayers < -1) {
+				player.sendMessage(setting + " must be -1 or greater!");
+				return;
+			}
 			region.setMaxPlayers(maxPlayers);
-		}else if(setting.equalsIgnoreCase("minPlayers")) {
+		}else if(setting.equalsIgnoreCase("minPlayers") || setting.equalsIgnoreCase("minp")) {
 			int minPlayers;
 			try{
 				minPlayers = Integer.parseInt(value);
@@ -516,19 +497,79 @@ public class RegionControl extends JavaPlugin {
 				player.sendMessage(setting + " must be an integer!");
 				return;
 			}
+			if (minPlayers < 0) {
+				player.sendMessage(setting + " must be zero or greater!");
+				return;
+			}
 			region.setMinPlayers(minPlayers);
-		}else if(setting.equalsIgnoreCase("minMessage")) {
-			region.setMinMessage(value);
-		}else if(setting.equalsIgnoreCase("maxMessage")) {
+		}else if(setting.equalsIgnoreCase("lockHealth") || setting.equalsIgnoreCase("lh")) {
+			int lockHealth;
+			try{
+				lockHealth = Integer.parseInt(value);
+			}catch(Exception ex){
+				player.sendMessage(setting + " must be an integer!");
+				return;
+			}
+			if (lockHealth < 0 || lockHealth > 20) {
+				player.sendMessage(setting + " must be in the range 0 to 20!");
+				return;
+			}
+			region.setLockHealth(lockHealth);
+		}else if(setting.equalsIgnoreCase("unlockHealth") || setting.equalsIgnoreCase("uh")) {
+			int unlockHealth;
+			try{
+				unlockHealth = Integer.parseInt(value);
+			}catch(Exception ex){
+				player.sendMessage(setting + " must be an integer!");
+				return;
+			}
+			if (unlockHealth < 0 || unlockHealth > 20) {
+				player.sendMessage(setting + " must be in the range 0 to 20!");
+				return;
+			}
+			region.setUnlockHealth(unlockHealth);
+		}else if(setting.equalsIgnoreCase("setInventory") || setting.equalsIgnoreCase("si")) {
+			int setInventory;
+			try{
+				setInventory = Integer.parseInt(value);
+			}catch(Exception ex){
+				player.sendMessage(setting + " must be an integer!");
+				return;
+			}
+			if (setInventory < 0 || setInventory > 2) {
+				player.sendMessage(setting + " must be in the range 0 to 2!");
+				return;
+			}
+			region.setSetInventory(setInventory);
+		}else if(setting.equalsIgnoreCase("restoreInventory") || setting.equalsIgnoreCase("ri")) {
+			int restoreInventory;
+			try{
+				restoreInventory = Integer.parseInt(value);
+			}catch(Exception ex){
+				player.sendMessage(setting + " must be an integer!");
+				return;
+			}
+			if (restoreInventory < 0 || restoreInventory > 2) {
+				player.sendMessage(setting + " must be in the range 0 to 2!");
+				return;
+			}
+			region.setRestoreInventory(restoreInventory);
+		}else if(setting.equalsIgnoreCase("maxMessage") || setting.equalsIgnoreCase("maxm")) {
 			region.setMaxMessage(value);
-		}else if(setting.equalsIgnoreCase("enterMessage")) {
+		}else if(setting.equalsIgnoreCase("minMessage") || setting.equalsIgnoreCase("minm")) {
+			region.setMinMessage(value);
+		}else if(setting.equalsIgnoreCase("enterMessage") || setting.equalsIgnoreCase("em")) {
 			region.setEnterMessage(value);
-		}else if(setting.equalsIgnoreCase("leaveMessage")) {
+		}else if(setting.equalsIgnoreCase("leaveMessage") || setting.equalsIgnoreCase("lm")) {
 			region.setLeaveMessage(value);
-		}else if(setting.equalsIgnoreCase("noEnterMessage")) {
+		}else if(setting.equalsIgnoreCase("noEnterMessage") || setting.equalsIgnoreCase("nem")) {
 			region.setNoEnterMessage(value);
-		}else if(setting.equalsIgnoreCase("noLeaveMessage")) {
+		}else if(setting.equalsIgnoreCase("noLeaveMessage") || setting.equalsIgnoreCase("nlm")) {
 			region.setNoLeaveMessage(value);
+		}else if(setting.equalsIgnoreCase("setInventoryMessage") || setting.equalsIgnoreCase("sim")) {
+			region.setSetInventoryMessage(value);
+		}else if(setting.equalsIgnoreCase("restoreInventoryMessage") || setting.equalsIgnoreCase("rim")) {
+			region.setRestoreInventoryMessage(value);
 		}else{
 			player.sendMessage("no such setting: " + setting);
 			return;
@@ -585,11 +626,12 @@ public class RegionControl extends JavaPlugin {
 		// Get the controlled region.
 		EbeanServer db = this.getDatabase();
 		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
-		if (region == null){
+		if (region == null) {
 			player.sendMessage("no such region");
 			return;
 		}
-		// Display world.
+		// Display name and world.
+		player.sendMessage("*** " + region.getName() + " ***");
 		player.sendMessage("world = " + region.getWorldName());
 		// Display region bounds.
 		player.sendMessage("max = (" + Double.toString(region.getMaxX()) + ", " + Double.toString(region.getMaxY()) + ", " + Double.toString(region.getMaxZ()) + ")");
@@ -610,18 +652,26 @@ public class RegionControl extends JavaPlugin {
 		}else{
 			player.sendMessage("region is not locked");
 		}
-		// Display max and min players info.
+		// Display max, min and current players info.
 		if (region.getMaxPlayers() < 0){
 			player.sendMessage("maxPlayers = no limit");
 		}else{
 			player.sendMessage("maxPlayers = " + region.getMaxPlayers());
 		}
-		if (region.getMinPlayers() < 0){
-			player.sendMessage("minPlayers = no limit");
-		}else{
-			player.sendMessage("minPlayers = " + region.getMinPlayers());
-		}
+		player.sendMessage("minPlayers = " + region.getMinPlayers());
 		player.sendMessage("currentPlayers = " + region.getCurrentPlayers());
+		player.sendMessage("lockHealth = " + region.getLockHealth());
+		player.sendMessage("unlockHealth = " + region.getUnlockHealth());
+		player.sendMessage("setInventory = " + region.getSetInventory());
+		player.sendMessage("restoreInventory = " + region.getRestoreInventory());
+		player.sendMessage("maxMessage = " + region.getMaxMessage());
+		player.sendMessage("minMessage = " + region.getMinMessage());
+		player.sendMessage("enterMessage = " + region.getEnterMessage());
+		player.sendMessage("leaveMessage = " + region.getLeaveMessage());
+		player.sendMessage("noEnterMessage = " + region.getNoEnterMessage());
+		player.sendMessage("noLeaveMessage = " + region.getNoLeaveMessage());
+		player.sendMessage("setInventoryMessage = " + region.getSetInventoryMessage());
+		player.sendMessage("restoreInventoryMessage = " + region.getRestoreInventoryMessage());
 	}
 	
 	/*
@@ -690,6 +740,8 @@ public class RegionControl extends JavaPlugin {
 	
 	/*
 	 * Sends a message to a player.
+	 * @param player - The player.
+	 * @param message - The message.
 	 */
 	private void sendMessage(Player player, String message){
 		if (player == null){
@@ -700,7 +752,33 @@ public class RegionControl extends JavaPlugin {
 	}
 	
 	/*
+	 * Saves a player's inventory.
+	 * @param player - The player.
+	 * @param region - The region.
+	 */
+	protected List<SavedItem> saveInventory(Player player, ControlledRegion region) {
+		List<SavedItem> savedItems = new ArrayList<SavedItem>();
+		PlayerInventory inventory = player.getInventory();
+		for (ItemStack item : inventory.getContents()) {
+			if (item != null && item.getTypeId() != 0) {
+				savedItems.add(this.createSavedItem(item, player, 0));
+			}
+		}
+		ItemStack helmet = inventory.getHelmet();
+		if (helmet != null) savedItems.add(this.createSavedItem(helmet, player, 1));
+		ItemStack chestPlate = inventory.getChestplate();
+		if (chestPlate != null) savedItems.add(this.createSavedItem(chestPlate, player, 2));
+		ItemStack leggings = inventory.getLeggings();
+		if (leggings != null) savedItems.add(this.createSavedItem(leggings, player, 3));
+		ItemStack boots = inventory.getBoots();
+		if (boots != null) savedItems.add(this.createSavedItem(boots, player, 4));
+		return savedItems;
+	}
+
+	/*
 	 * Indicates whether a player is inside a controlled region.
+	 * @param region - The region.
+	 * @param player - The player.
 	 */
 	private boolean regionContainsPlayer(ControlledRegion region, Player player) {
 		Location location = player.getLocation();
@@ -752,15 +830,100 @@ public class RegionControl extends JavaPlugin {
 	}
 	
 	/*
+	 * Creates an ItemStack from a RegionItem.
+	 * @param regionItem - The region item.
+	 */
+	private ItemStack createItemStack(RegionItem regionItem) {
+		int typeId = regionItem.getTypeId();
+		if (typeId == 0) return null;
+		ItemStack item = new ItemStack(typeId, 1);
+		item.setDurability(regionItem.getDurability());
+		item.setAmount(regionItem.getAmount());
+		if (regionItem.getData() != 0){
+			item.setData(new MaterialData(typeId, regionItem.getData()));
+		}
+		return item;
+	}
+	
+	/*
+	 * Sets a players inventory to a region's items.
+	 * @param player - The player.
+	 * @param region - The region.
+	 */
+	protected void setInventory(Player player, ControlledRegion region) {
+		// Clear player's inventory.
+		PlayerInventory inventory = player.getInventory();
+		inventory.clear();
+		inventory.setHelmet(null);
+		inventory.setChestplate(null);
+		inventory.setLeggings(null);
+		inventory.setBoots(null);
+		// Give player region's items.
+		EbeanServer db = this.getDatabase();
+		List<RegionItem> regionItems = db.find(RegionItem.class).where().eq("regionId", region.getId()).findList();
+		for (RegionItem regionItem : regionItems) {
+			this.setInventoryItem(regionItem, inventory);
+		}
+		// Notify player.
+		String message = region.getSetInventoryMessage();
+		if (message.length() > 0) player.sendMessage(message);
+	}
+	
+	/*
+	 * Gives the player a region item.
+	 * @param regionItem - The region item to add.
+	 * @param inventory - The player's inventory.
+	 */
+	private void setInventoryItem(RegionItem regionItem, PlayerInventory inventory) {
+		if (regionItem == null) return;
+		this.setInventoryItem(this.createItemStack(regionItem), inventory, regionItem.getCategory());
+	}
+	
+	/*
 	 * Restores a saved item to a player's inventory.
 	 * @param savedItem - The saved item to add.
 	 * @param inventory - The player's inventory.
 	 */
-	private void restoreInventoryItem(SavedItem savedItem, PlayerInventory inventory) {
+	private void setInventoryItem(SavedItem savedItem, PlayerInventory inventory) {
 		if (savedItem == null) return;
-		ItemStack item = this.createItemStack(savedItem);
+		this.setInventoryItem(this.createItemStack(savedItem), inventory, savedItem.getCategory());
+	}
+	
+	/*
+	 * Restores a player's inventory.
+	 * TODO: Test what happens when inventory cannot hold all items.
+	 * @param player - The player.
+	 * @param region - The region.
+	 */
+	protected List<SavedItem> restoreInventory(Player player, ControlledRegion region) {
+		// Clear player's inventory.
+		PlayerInventory inventory = player.getInventory();
+		inventory.clear();
+		inventory.setHelmet(null);
+		inventory.setChestplate(null);
+		inventory.setLeggings(null);
+		inventory.setBoots(null);
+		EbeanServer db = this.getDatabase();
+		List<SavedItem> savedItems = db.find(SavedItem.class).where().eq("playerName", player.getName()).findList();
+		for (SavedItem savedItem : savedItems) {
+			this.setInventoryItem(savedItem, inventory);
+		}
+		// Notify player.
+		String message = region.getRestoreInventoryMessage();
+		if (message.length() > 0) player.sendMessage(message);
+		// Return the saved items so they can be deleted.
+		return savedItems;
+	}
+
+	/*
+	 * Gives an item to a player.
+	 * @param item - The item.
+	 * @param inventory - The player's inventory.
+	 * @param category - The saved item category.
+	 */
+	private void setInventoryItem(ItemStack item, PlayerInventory inventory, int category) {
 		if (item == null) return;
-		switch(savedItem.getCategory()){
+		switch(category){
 		case 0: // item
 			inventory.addItem(item);
 			break;
@@ -777,9 +940,9 @@ public class RegionControl extends JavaPlugin {
 			inventory.setBoots(item);
 			break;
 		default:
-			System.out.print("Error - Invalid item category: " + savedItem.getCategory());
+			System.out.print("Error - Invalid item category: " + category);
 			break;
-		}
+		}		
 	}
 
 	/*
