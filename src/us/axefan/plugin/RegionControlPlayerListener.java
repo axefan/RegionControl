@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -37,7 +38,8 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 				// Player is trying to leave the region.
 				if (region.getLocked()) {
 					this.preventPlayerMove(event);
-					player.sendMessage(region.getNoLeaveMessage());
+					String msg = region.getNoLeaveMessage();
+					if (msg.length() > 0) player.sendMessage(msg);
 					return;
 				}else{
 					// Send player message.
@@ -57,13 +59,15 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 				if (region.getLocked()) {
 					// Region is locked
 					this.preventPlayerMove(event);
-					player.sendMessage(region.getNoEnterMessage());
+					String msg = region.getNoEnterMessage();
+					if (msg.length() > 0) player.sendMessage(msg);
 					return;
 				}else{
 					// Check max players.
 					if (region.getMaxPlayers() >= 0 && region.getCurrentPlayers() == region.getMaxPlayers()) {
 						// No more players allowed.
-						player.sendMessage(region.getMaxMessage());
+						String msg = region.getMaxMessage();
+						if (msg.length() > 0) player.sendMessage(msg);
 						this.preventPlayerMove(event);
 						return;
 					}
@@ -84,16 +88,27 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 		}
 	}
 	
+	
+	public void onPlayerJoin(PlayerJoinEvent event) {
+		
+		// TODO: Prevent join into locked region.
+		System.out.print(event.getPlayer().getName() + " joined");
+	}
+	
 	public void onPlayerQuit(PlayerQuitEvent event) {
+		// TODO: Remove locks and items on locked player quit.
 	}
 	
 	public void onPlayerKick(PlayerKickEvent event) {
+		// TODO: Remove locks and items on locked player quit.
 	}
 	
 	public void onPlayerRespawn(PlayerRespawnEvent event) {
+		System.out.print(event.getPlayer().getName() + " spawned");
 	}
 	
 	public void onPlayerTeleport(PlayerTeleportEvent event) {
+		System.out.print(event.getPlayer().getName() + " teleported");
 	}
 	
 	/*

@@ -65,10 +65,16 @@ public class ControlledRegion {
     private int restoreInventory = 0; // 0 = no change, 1 = on leave, 2 = on unlock, alias = ri
     
     @NotNull
-    private String maxMessage = "no more players allowed"; // alias = minm
+    private Boolean lockOnMaxPlayers = false;
     
     @NotNull
-    private String minMessage = "waiting for more players"; // alias = maxm
+    private String maxMessage = "no more players allowed"; // alias = maxm
+    
+    @NotNull
+    private String minMessage = "waiting for {$count} more players"; // alias = minm
+    
+    @NotNull
+    private String minMessage1 = "waiting for 1 more player"; // alias = min1
     
     @NotNull
     private String enterMessage = ""; // alias = em
@@ -88,12 +94,13 @@ public class ControlledRegion {
     @NotNull
     private String restoreInventoryMessage = ""; // alias = rim
     
+    @NotNull
+    private int selectionMode = 1; // 1 = WorldEdit
+    
     // TODO: Add ControlledRegion.failSpawn point (for kick from controlled region - death on ControlledRegion.maxTries, on reload).
     // TODO: Add ControlledRegion.retrySpawn point (for reset after death when less than ControlledRegion.maxTries.
     // TODO: Add ControlledRegion.lives & LockedPlayer.lives (number of deaths before kick to ControlledRegion.failSpawn).
     // TODO: Add ControlledRegion.lockOnMaxPlayers
-    // TODO: Add ControlledRegion.setInventoryMessage
-    // TODO: Add ControlledRegion.restoreInventoryMessage
     
 	public void setId(int id) {
 		this.id = id;
@@ -301,6 +308,30 @@ public class ControlledRegion {
 
 	public String getRestoreInventoryMessage() {
 		return restoreInventoryMessage;
+	}
+
+	public void setLockOnMaxPlayers(Boolean lockOnMaxPlayers) {
+		this.lockOnMaxPlayers = lockOnMaxPlayers;
+	}
+
+	public Boolean getLockOnMaxPlayers() {
+		return lockOnMaxPlayers;
+	}
+
+	public void setSelectionMode(int selectionMode) {
+		this.selectionMode = selectionMode;
+	}
+
+	public int getSelectionMode() {
+		return selectionMode;
+	}
+
+	public void setMinMessage1(String minMessage1) {
+		this.minMessage1 = minMessage1;
+	}
+
+	public String getMinMessage1() {
+		return minMessage1;
 	}
 	
 }

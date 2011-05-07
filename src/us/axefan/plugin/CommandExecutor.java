@@ -20,23 +20,30 @@ public class CommandExecutor implements org.bukkit.command.CommandExecutor {
 		if (action.equals("list")) {
 			this.plugin.list(player);
 			return true;
-		}else if (action.equals("info")) {
+		}else if (action.equals("info") || action.equals("i")) {
 			if (args.length < 2) {
 				player.sendMessage("/rc info <name>");
 				return true;
 			}
 			this.plugin.info(player, args[1].trim());
 			return true;
-		}else if (action.equals("create")) {
+		}else if (action.equals("messages") || action.equals("m")) {
+			if (args.length < 2) {
+				player.sendMessage("/rc messages <name>");
+				return true;
+			}
+			this.plugin.messages(player, args[1].trim());
+			return true;
+		}else if (action.equals("create") || action.equals("c")) {
 			if (args.length < 2) {
 				player.sendMessage("/rc create <name>");
 				return true;
 			}
 			this.plugin.create(player, args[1].trim());
 			return true;
-		}else if (action.equals("update")) {
+		}else if (action.equals("edit") || action.equals("e")) {
 			if (args.length < 4) {
-				player.sendMessage("/rc update <name> <field> <value>");
+				player.sendMessage("/rc edit <name> <field> <value>");
 				return true;
 			}
 			String arg3;
@@ -48,25 +55,25 @@ public class CommandExecutor implements org.bukkit.command.CommandExecutor {
 					arg3 += args[i] + " ";
 				}
 			}
-			this.plugin.update(player, args[1].trim(), args[2].trim(), arg3.trim());
+			this.plugin.edit(player, args[1].trim(), args[2].trim(), arg3.trim());
 			return true;
-		}else if (action.equals("delete")) {
+		}else if (action.equals("delete") || action.equals("d")) {
 			if (args.length < 2) {
 				player.sendMessage("/rc delete <name>");
 				return true;
 			}
 			this.plugin.delete(player, args[1].trim());
 			return true;
-		}else if (action.equals("snap")) {
+		}else if (action.equals("snap") || action.equals("s")) {
 			if (args.length < 2) {
 				player.sendMessage("/rc snap <name>");
 				return true;
 			}
 			this.plugin.snap(player, args[1].trim());
 			return true;
-		}else if (action.equals("delsnap")) {
+		}else if (action.equals("deleteFrame") || action.equals("df")) {
 			if (args.length < 2) {
-				player.sendMessage("/rc delsnap <name> [frame]");
+				player.sendMessage("/rc deleteFrame <name> [frame]");
 				return true;
 			}
 			if (args.length == 2) {
@@ -75,7 +82,7 @@ public class CommandExecutor implements org.bukkit.command.CommandExecutor {
 				plugin.delsnap(player, args[1].trim(), Integer.parseInt(args[2].trim()));
 			}
 			return true;
-		}else if (action.equals("frame")) {
+		}else if (action.equals("frame") || action.equals("f")) {
 			if (args.length < 2) {
 				player.sendMessage("/rc frame <name> [frame]");
 				return true;
@@ -86,14 +93,14 @@ public class CommandExecutor implements org.bukkit.command.CommandExecutor {
 				plugin.frame(player, args[1].trim(), Integer.parseInt(args[2].trim()));
 			}
 			return true;
-		}else if (action.equals("lock")) {
+		}else if (action.equals("lock") || action.equals("l")) {
 			if (args.length < 2) {
 				player.sendMessage("/rc lock <name>");
 				return true;
 			}
 			plugin.lock(player, args[1].trim());
 			return true;
-		}else if (action.equals("unlock")) {
+		}else if (action.equals("unlock") || action.equals("u")) {
 			if (args.length < 2) {
 				player.sendMessage("/rc unlock <name>");
 				return true;

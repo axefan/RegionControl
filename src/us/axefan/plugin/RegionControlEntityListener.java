@@ -10,9 +10,11 @@ public class RegionControlEntityListener extends org.bukkit.event.entity.EntityL
 	public RegionControlEntityListener(RegionControl instance) {
 		plugin = instance;
 	}
-
+	
 	public void onEntityDeath(EntityDeathEvent event) {
-		if (!(event.getEntity() instanceof Player)) {
+		if ((event.getEntity() instanceof Player)) {
+			Player player = (Player) event.getEntity();
+			System.out.print(player.getName() + " died");
 	        return;
 	    }
 	}

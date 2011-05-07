@@ -1,3 +1,7 @@
+REGION CONTROL PLUGIN
+
+Advanced region control for Bukkit.
+
 Passing player inventory from region A to region B:
 
 								|-------------------|           |-------------------|
@@ -16,4 +20,4 @@ Passing player inventory from region A to region B:
 4. When player leaves (or unlock) B, inventory is restored. /rc update B restoreInventory 1 (or 2)
 
 Warning, if the player dies while between regions, the player's inventory needs to be restored.
-Need to monitor for deaths and check saved items as well as locks even when not in a region!
+We need to monitor for deaths and check saved items as well as locks even when not in a region!
