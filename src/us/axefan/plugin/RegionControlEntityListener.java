@@ -14,6 +14,7 @@ public class RegionControlEntityListener extends org.bukkit.event.entity.EntityL
 	public void onEntityDeath(EntityDeathEvent event) {
 		if ((event.getEntity() instanceof Player)) {
 			Player player = (Player) event.getEntity();
+			// TODO: If minPlayers is violated, all players get fail condition.
 			System.out.print(player.getName() + " died");
 	        return;
 	    }

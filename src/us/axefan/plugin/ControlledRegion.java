@@ -59,10 +59,10 @@ public class ControlledRegion {
     private int unlockHealth = 0; // 0 = no change, range = 0 - 20, alias = uh
     
     @NotNull
-    private int setInventory = 0; // 0 = no change, 1 = on enter, 2 = on lock, alias = si
+    private int setInventory = RegionControl.SetInventoryNever; // 0 = no change, 1 = on enter, 2 = on lock, alias = si
     
     @NotNull
-    private int restoreInventory = 0; // 0 = no change, 1 = on leave, 2 = on unlock, alias = ri
+    private int restoreInventory = RegionControl.RestoreInventoryNever; // 0 = no change, 1 = on leave, 2 = on unlock, alias = ri
     
     @NotNull
     private Boolean lockOnMaxPlayers = false;
@@ -89,6 +89,9 @@ public class ControlledRegion {
     private String noLeaveMessage = "You cannot leave this area!"; // alias = nlm
     
     @NotNull
+    private String joinMoveMessage = ""; // alias = jmm
+    
+    @NotNull
     private String setInventoryMessage = ""; // alias = sim
     
     @NotNull
@@ -97,10 +100,24 @@ public class ControlledRegion {
     @NotNull
     private int selectionMode = 1; // 1 = WorldEdit
     
-    // TODO: Add ControlledRegion.failSpawn point (for kick from controlled region - death on ControlledRegion.maxTries, on reload).
-    // TODO: Add ControlledRegion.retrySpawn point (for reset after death when less than ControlledRegion.maxTries.
+    @NotNull
+    private Boolean spawnSet = false;
+    
+    @NotNull
+    private int spawnX = 0;
+    
+    @NotNull
+    private int spawnY = 0;
+    
+    @NotNull
+    private int spawnZ = 0;
+    
+    // TODO: Add ControlledRegion.failLocation (for kick from controlled region - death on ControlledRegion.maxTries, on reload).
+    // TODO: Add ControlledRegion.retryLocation point (for reset after death when less than ControlledRegion.maxTries.
+    // TODO: Add ControlledRegion.victoryLocation
     // TODO: Add ControlledRegion.lives & LockedPlayer.lives (number of deaths before kick to ControlledRegion.failSpawn).
     // TODO: Add ControlledRegion.lockOnMaxPlayers
+    // TODO: Add defaultFrame setting.  This frame will be loaded when the plugin loads. 0 = no change.
     
 	public void setId(int id) {
 		this.id = id;
@@ -172,14 +189,6 @@ public class ControlledRegion {
 
 	public int getSnapshotId() {
 		return snapshotId;
-	}
-
-	public void setLocked(Boolean locked) {
-		this.locked = locked;
-	}
-
-	public Boolean getLocked() {
-		return locked;
 	}
 
 	public void setMaxPlayers(int maxPlayers) {
@@ -310,14 +319,6 @@ public class ControlledRegion {
 		return restoreInventoryMessage;
 	}
 
-	public void setLockOnMaxPlayers(Boolean lockOnMaxPlayers) {
-		this.lockOnMaxPlayers = lockOnMaxPlayers;
-	}
-
-	public Boolean getLockOnMaxPlayers() {
-		return lockOnMaxPlayers;
-	}
-
 	public void setSelectionMode(int selectionMode) {
 		this.selectionMode = selectionMode;
 	}
@@ -333,5 +334,60 @@ public class ControlledRegion {
 	public String getMinMessage1() {
 		return minMessage1;
 	}
-	
+
+	public void setSpawnX(int spawnX) {
+		this.spawnX = spawnX;
+	}
+
+	public int getSpawnX() {
+		return spawnX;
+	}
+
+	public void setSpawnY(int spawnY) {
+		this.spawnY = spawnY;
+	}
+
+	public int getSpawnY() {
+		return spawnY;
+	}
+
+	public void setSpawnZ(int spawnZ) {
+		this.spawnZ = spawnZ;
+	}
+
+	public int getSpawnZ() {
+		return spawnZ;
+	}
+
+	public void setLocked(Boolean locked) {
+		this.locked = locked;
+	}
+
+	public Boolean getLocked() {
+		return locked;
+	}
+
+	public void setLockOnMaxPlayers(Boolean lockOnMaxPlayers) {
+		this.lockOnMaxPlayers = lockOnMaxPlayers;
+	}
+
+	public Boolean getLockOnMaxPlayers() {
+		return lockOnMaxPlayers;
+	}
+
+	public void setSpawnSet(Boolean spawnSet) {
+		this.spawnSet = spawnSet;
+	}
+
+	public Boolean getSpawnSet() {
+		return spawnSet;
+	}
+
+	public void setJoinMoveMessage(String joinMoveMessage) {
+		this.joinMoveMessage = joinMoveMessage;
+	}
+
+	public String getJoinMoveMessage() {
+		return joinMoveMessage;
+	}
 }

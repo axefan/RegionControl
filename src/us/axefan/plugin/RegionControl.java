@@ -7,9 +7,11 @@ import java.util.List;
 
 import javax.persistence.PersistenceException;
 
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.inventory.ItemStack;
@@ -30,8 +32,14 @@ public class RegionControl extends JavaPlugin {
     private final RegionControlPlayerListener playerListener = new RegionControlPlayerListener(this);
     private final RegionControlEntityListener entityListener = new RegionControlEntityListener(this);
     private final RegionControlBlockListener blockListener = new RegionControlBlockListener(this);
-	private boolean initialized = false;
 	private String name;
+	
+	protected static final int SetInventoryNever = 0;
+	protected static final int SetInventoryOnEnter = 1;
+	protected static final int SetInventoryOnLock = 2;
+	protected static final int RestoreInventoryNever = 0;
+	protected static final int RestoreInventoryOnLeave = 1;
+	protected static final int RestoreInventoryOnUnlock = 2;
 	
     /*
      * Setup database.
@@ -40,16 +48,48 @@ public class RegionControl extends JavaPlugin {
         PluginDescriptionFile desc = this.getDescription();
         this.name = desc.getName();
 		// Setup database.
-		this.setupDatabase();
-		// Initialize database
-		this.initDatabase();
-        System.out.println("Loaded " + this.name + " v" + desc.getVersion() + ".");
+		this.installDatabase();
+        System.out.println(ChatColor.RED + "Loaded " + this.name + " v" + desc.getVersion() + ".");
     }
     
     /*
      * Setup commands and events.
      */
 	public void onEnable() {
+        // Reset all regions.
+		EbeanServer db = this.getDatabase();
+		List<ControlledRegion> regions = new ArrayList<ControlledRegion>();
+		List<ControlledRegion> allRegions = db.find(ControlledRegion.class).findList();
+		for (ControlledRegion region : allRegions) {
+			if (region.getLocked() || (region.getCurrentPlayers() != 0)) {
+				region.setLocked(false);
+				region.setCurrentPlayers(this.getPlayersInRegion(region).size());
+				regions.add(region);
+			}
+		}
+		// Get all locked players.
+		List<LockedPlayer> lockedPlayers = db.find(LockedPlayer.class).findList();
+		// Get all saved items.
+		List<SavedItem> savedItems = db.find(SavedItem.class).findList();
+		// Update database.
+		if ((regions.size() > 0) || (lockedPlayers.size() > 0) || (savedItems.size() > 0)) {
+			// Update regions.
+			if (regions.size() > 0) {
+				System.out.print(this.name + ": Reseting " + regions.size() + " region" + (regions.size() > 1 ? "s." : "."));
+				db.save(regions);
+			}
+			// Delete locked players.
+			if (lockedPlayers.size() > 0) {
+				System.out.print(this.name + ": Removing " + lockedPlayers.size() + " locked player" + (lockedPlayers.size() > 1 ? "s." : "."));
+				db.delete(lockedPlayers);
+			}
+			// Delete saved items.
+			if (savedItems.size() > 0) {
+				System.out.print(this.name + ": Removing " + savedItems.size() + " saved item" + (savedItems.size() > 1 ? "s." : "."));
+				db.delete(savedItems);
+			}
+		}
+		// TODO: set player's inventory if region.setInventory = 1. 
 		// Setup commands and events.
 		this.getCommand("rc").setExecutor(new CommandExecutor (this));
 		PluginManager pm = getServer().getPluginManager();
@@ -71,77 +111,78 @@ public class RegionControl extends JavaPlugin {
 	}
 	
 	/*
-	 * Perform basic database maintenance.
+	 * Unlock regions, spawn players, restore inventory, etc.
 	 */
-	private void initDatabase() {
-		if (this.initialized) return;
-        // Reset all regions.
+	public void onDisable() {
+       // Reset all regions.
 		EbeanServer db = this.getDatabase();
 		List<ControlledRegion> regions = new ArrayList<ControlledRegion>();
 		List<ControlledRegion> allRegions = db.find(ControlledRegion.class).findList();
+		List<LockedPlayer> lockedPlayers = new ArrayList<LockedPlayer>();
+		List<SavedItem> savedItems = new ArrayList<SavedItem>();
 		for (ControlledRegion region : allRegions) {
-			if (region.getLocked() || (region.getCurrentPlayers() != 0)) {
+			if (region.getLocked()) {
+				// Unlock players.
+				List<LockedPlayer> regionPlayers = db.find(LockedPlayer.class).where().eq("regionId", region.getId()).findList();
+				lockedPlayers.addAll(regionPlayers);
+				for (LockedPlayer lockedPlayer : regionPlayers) {
+					Player player = this.getServer().getPlayer(lockedPlayer.getName());
+					// Teleport to default spawn location.
+					player.teleport(this.getSpawnLocation(region));
+					// Restore inventory.
+					if (region.getSetInventory() == RegionControl.SetInventoryOnLock){
+						savedItems.addAll(this.restoreInventory(player, region));
+					}
+				}
+				// Unlock the region and clear player count.
 				region.setLocked(false);
 				region.setCurrentPlayers(0);
 				regions.add(region);
+			}else if(region.getSetInventory() == RegionControl.SetInventoryOnEnter){
+				// Restore inventory.
+				List<Player> regionPlayers = this.getPlayersInRegion(region);
+				for (Player player : regionPlayers){
+					savedItems.addAll(this.restoreInventory(player, region));
+				}
 			}
 		}
-		// Get all locked regions.
-		List<LockedPlayer> lockedPlayers = db.find(LockedPlayer.class).findList();
-		// Get all saved items.
-		List<SavedItem> savedItems = db.find(SavedItem.class).findList();
-		if ((regions.size() > 0) || (lockedPlayers.size() > 0) || (savedItems.size() > 0)) {
-			// Begin transaction.
-			db.beginTransaction();
+		try{
 			// Update regions.
-			if (regions.size() > 0) {
-				System.out.print(this.name + ": Reseting " + regions.size() + " region" + (regions.size() > 1 ? "s." : "."));
-				db.save(regions);
-			}
+			db.save(regions);
 			// Delete locked players.
-			if (lockedPlayers.size() > 0) {
-				System.out.print(this.name + ": Removing " + lockedPlayers.size() + " locked player" + (lockedPlayers.size() > 1 ? "s." : "."));
-				db.delete(lockedPlayers);
-			}
+			if (lockedPlayers.size() > 0) db.delete(lockedPlayers);
 			// Delete saved items.
-			if (savedItems.size() > 0) {
-				System.out.print(this.name + ": Removing " + savedItems.size() + " saved item" + (savedItems.size() > 1 ? "s." : "."));
-				db.delete(savedItems);
-			}
-			// Commit transaction.
-			db.commitTransaction();
+			if (savedItems.size() > 0) db.delete(savedItems);
+		}catch(Exception ex){
+			
 		}
-		this.initialized = true;
-	}
-
-	public void onDisable() {
 		System.out.println(this.name + " disabled.");
 	}
 	
 	/*
-	 * Restores a region to the next snapshot frame.
-	 * @param player - The player.
-	 * @param name - The name of the region.
+	 * Advances a region to the next snapshot frame.
+	 * @param sender - The command sender.
+	 * @param regionName - The name of the region to modify.
 	 */
-	protected void frame(Player player, String name) {
+	protected void frame(CommandSender sender, String regionName) {
 		// Get the controlled region
 		EbeanServer db = this.getDatabase();
-		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
+		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", regionName).findUnique();
 		if (region == null){
-			this.sendMessage(player, "no such region");
+			this.sendMessage(sender, Messages.NoRegionError);
 			return;
 		}
 		// Get the current snapshot.
 		List<RegionSnapshot> snapshots = db.find(RegionSnapshot.class).where().eq("regionId", region.getId()).orderBy("id").findList();
 		if (snapshots.size() == 0){
-			this.sendMessage(player, "no snapshots defined for this region");
+			this.sendMessage(sender, Messages.NoSnapshotsError);
 			return;
 		}
 		// Auto-index to the next frame.  Wrap to first frame on last entry.
 		int index;
 		int snapshotId = region.getSnapshotId();
 		if (snapshotId == 0) {
-			this.sendMessage(player, "Error: Invalid region! Current snapshot not found.");
+			this.sendMessage(sender, Messages.SnapshotNotFoundError);
 			return;
 		}else{
 			RegionSnapshot currentSnapshot = db.find(RegionSnapshot.class).where().eq("id", snapshotId).findUnique();
@@ -149,45 +190,44 @@ public class RegionControl extends JavaPlugin {
 			if (index == snapshots.size()) index = 0;
 		}
 		// Restore the frame.
-		this.frame(player, region, snapshots, index + 1);
+		this.frame(sender, region, snapshots, index + 1);
 	}
 	
 	/*
 	 * Restores a region to the specified snapshot frame.
-	 * @param player - The player.
-	 * @param name - The name of the region.
-	 * @param index - The index of the frame to restore.
+	 * @param sender - The command sender.
+	 * @param regionName - The name of the region.
+	 * @param frameNumber - The number of the frame to restore. The first frame is always 1.
 	 */
-	protected void frame(Player player, String name, int index) {
+	protected void frame(CommandSender sender, String regionName, int frameNumber) {
 		// Get the controlled region
 		EbeanServer db = this.getDatabase();
-		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
+		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", regionName).findUnique();
 		if (region == null) {
-			this.sendMessage(player, "no such region");
+			this.sendMessage(sender, Messages.NoRegionError);
 			return;
 		}
 		// Get the requested snapshot.
 		List<RegionSnapshot> snapshots = db.find(RegionSnapshot.class).where().eq("regionId", region.getId()).orderBy("id").findList();
 		if (snapshots.size() == 0) {
-			this.sendMessage(player, "no snapshots defined for this region");
+			this.sendMessage(sender, Messages.NoSnapshotsError);
 			return;
 		}
 		// Restore the frame.
-		this.frame(player, region, snapshots, index);
+		this.frame(sender, region, snapshots, frameNumber);
 	}
 	
 	/*
 	 * Restores a region to the specified snapshot frame.
-	 * @param world - The world.
-	 * @param player - The player.
+	 * @param sender - The command sender.
 	 * @param region - The controlled region.
 	 * @param snapshots - A list of snapshots for the controlled region.
-	 * @param frameNumber - The index of the frame to restore.
+	 * @param frameNumber - The number of the frame to restore. The first frame is always 1.
 	 */
-	private void frame(Player player, ControlledRegion region, List<RegionSnapshot> snapshots, int frameNumber) {
+	private void frame(CommandSender sender, ControlledRegion region, List<RegionSnapshot> snapshots, int frameNumber) {
 		// Check index bounds.
 		if (frameNumber < 1 || frameNumber > snapshots.size()) {
-			this.sendMessage(player, "invalid frame");
+			this.sendMessage(sender, Messages.InvalidFrameError);
 			return;
 		}
 		// Get the specified snapshot frame.
@@ -206,8 +246,7 @@ public class RegionControl extends JavaPlugin {
 		region.setSnapshotId(snapshot.getId());
 		db.update(region);
 		// Notify player.
-		// TODO: Add ControlledRegion.frameMessage.  Support {$frame} tag.
-		if (player != null) player.sendMessage("frame " + Integer.toString(frameNumber) + " restored");
+		if (sender != null) sender.sendMessage(ChatColor.DARK_GREEN + Messages.FrameRestoredMessage.replace("{$frame}", Integer.toString(frameNumber)));
 	}
 	
 	/*
@@ -223,20 +262,20 @@ public class RegionControl extends JavaPlugin {
 	 *  - The region cannot be locked until the [minPlayers] condition has been met.
 	 *  - If a lock is attempted when the [minPlayers] condition has not been met, all players in the
 	 *    region will receive the [minMessage] notification.
-	 * @param player - The player.
-	 * @param name - The name of the region.
+	 * @param sender - The command sender.
+	 * @param regionName - The name of the region to lock.
 	 */
-	protected void lock(Player player, String name) {
+	protected void lock(CommandSender sender, String regionName) {
 		// Get the controlled region
 		EbeanServer db = this.getDatabase();
-		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
+		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", regionName).findUnique();
 		if (region == null) {
-			this.sendMessage(player, "no such region");
+			this.sendMessage(sender, Messages.NoRegionError);
 			return;
 		}
 		// Check current region status.
 		if (region.getLocked()) {
-			this.sendMessage(player, "region is already locked");
+			this.sendMessage(sender, Messages.RegionAlreadyLockedError);
 			return;
 		}
 		// Check minPlayers
@@ -264,7 +303,7 @@ public class RegionControl extends JavaPlugin {
 			lockedPlayer.setHealth(regionPlayer.getHealth());
 			lockedPlayers.add(lockedPlayer);
 			// Set the player's inventory.
-			if (region.getSetInventory() == 2) {
+			if (region.getSetInventory() == RegionControl.SetInventoryOnLock) {
 				savedItems.addAll(this.saveInventory(regionPlayer, region));
 				this.setInventory(regionPlayer, region);
 			}
@@ -284,10 +323,11 @@ public class RegionControl extends JavaPlugin {
 			if (savedItems.size() > 0) db.save(savedItems);
 			// Commit transaction.
 			db.commitTransaction();
-			this.sendMessage(player, "region locked");
+			this.sendMessage(sender, Messages.RegionLockedMessage);
 		} catch(Exception ex) {
 			ex.printStackTrace();
-			this.sendMessage(player, "unable to lock region! check server logs.");
+			this.sendMessage(sender, Messages.LockRegionError);
+			if (sender instanceof Player) this.sendMessage(sender, Messages.CheckServerLogs);
 			db.rollbackTransaction();
 		}
 	}
@@ -301,20 +341,20 @@ public class RegionControl extends JavaPlugin {
 	 *    will receive the contents of the region's rewards table.
 	 *  - Any player may leave the region.
 	 *  - Any player may enter the region (up to [maxPlayers] if defined).
-	 * @param player - The player.
-	 * @param name - The name of the region.
+	 * @param sender - The command sender.
+	 * @param regionName - The name of the region to unlock.
 	 */
-	protected void unlock(Player player, String name) {
+	protected void unlock(CommandSender sender, String regionName) {
 		// Get the controlled region
 		EbeanServer db = this.getDatabase();
-		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
+		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", regionName).findUnique();
 		if (region == null) {
-			this.sendMessage(player, "no such region");
+			this.sendMessage(sender, Messages.NoRegionError);
 			return;
 		}
 		// Check current region status.
 		if (!region.getLocked()) {
-			this.sendMessage(player, "region is not locked");
+			this.sendMessage(sender, Messages.RegionNotLockedError);
 			return;
 		}
 		// Unlock the region.
@@ -325,10 +365,10 @@ public class RegionControl extends JavaPlugin {
 		for (LockedPlayer lockedPlayer : lockedPlayers) {
 			// Restore player's inventory.
 			Player regionPlayer = this.getServer().getPlayer(lockedPlayer.getName());
-			if (region.getRestoreInventory() == 2) {
+			if (region.getRestoreInventory() == RegionControl.RestoreInventoryOnUnlock) {
 				savedItems.addAll(this.restoreInventory(regionPlayer, region));
 			}
-			// TODO: Give each player the contents of the rewards table.
+			// TODO: Give players the contents of the rewards table.
 			// Restore player's health.
 			int unlockHealth = region.getUnlockHealth();
 			if (unlockHealth > 0) regionPlayer.setHealth(unlockHealth);
@@ -345,10 +385,11 @@ public class RegionControl extends JavaPlugin {
 			db.update(region);
 			// Commit transaction.
 			db.commitTransaction();
-			this.sendMessage(player, "region unlocked");
+			this.sendMessage(sender, Messages.RegionUnlockedMessage);
 		}catch(Exception ex){
 			ex.printStackTrace();
-			this.sendMessage(player, "unable to unlock region! check server logs.");
+			this.sendMessage(sender, Messages.UnlockRegionError);
+			if (sender instanceof Player) this.sendMessage(sender, Messages.CheckServerLogs);
 			db.rollbackTransaction();
 		}
 	}
@@ -357,19 +398,21 @@ public class RegionControl extends JavaPlugin {
 	// TODO: Add victory handling (on unlock region perform action).  1 = teleport to [victorySpawn].
 	// TODO: And fail handling (on unlock region perform action).  1 = teleport to [failSpawn].
 	// TODO: Add a PlayerRewards table.  Rewards table should be able to support inventory, armor & money.
+	// TODO: Award an achievement if custom achievements can be created.
+	// TODO: Increment statistic for fail and victory if custom statistics can be created.
 	// TODO: Give each player the contents of the PlayerRewards table on unlock if victory.
 
 	/*
 	 * Creates a new snapshot for a region.
-	 * @param player - The player.
-	 * @param name - The name of the region.
+	 * @param sender - The command sender.
+	 * @param regionName - The name of the region.
 	 */
-	protected void snap(Player player, String name) {
+	protected void snap(CommandSender sender, String regionName) {
 		// Get the controlled region
 		EbeanServer db = this.getDatabase();
-		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
+		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", regionName).findUnique();
 		if (region == null){
-			this.sendMessage(player, "no such region");
+			this.sendMessage(sender, Messages.NoRegionError);
 			return;
 		}
 		try{
@@ -408,68 +451,69 @@ public class RegionControl extends JavaPlugin {
 			// Commit transaction
 			db.commitTransaction();			
 			// Notify player.
-			this.sendMessage(player, "snapshot created");
+			this.sendMessage(sender, Messages.SnapshotCreatedMessage);
 		}catch(Exception ex) {
 			ex.printStackTrace();
-			this.sendMessage(player, "unable to create snapshot! check server logs.");
+			this.sendMessage(sender, Messages.CreateSnapshotError);
+			if (sender instanceof Player) this.sendMessage(sender, Messages.CheckServerLogs);
 			db.rollbackTransaction();
 		}
 	}
 	
 	/*
 	 * Deletes the last snapshot for a region.
-	 * @param player - The player.
-	 * @param name - The name of the region.
+	 * @param sender - The command sender.
+	 * @param regionName - The name of the region.
 	 */
-	protected void delsnap(Player player, String name) {
+	protected void delsnap(CommandSender sender, String regionName) {
 		// Get the controlled region
 		EbeanServer db = this.getDatabase();
-		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
+		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", regionName).findUnique();
 		if (region == null) {
-			this.sendMessage(player, "no such region");
+			this.sendMessage(sender, Messages.NoRegionError);
 			return;
 		}
 		// Get the region's snapshots in order.
 		List<RegionSnapshot> snapshots = db.find(RegionSnapshot.class).where().eq("regionId", region.getId()).orderBy("id").findList();
 		if (snapshots.size() == 0) {
-			this.sendMessage(player, "no snapshots defined for this region");
+			this.sendMessage(sender, Messages.NoSnapshotsError);
 			return;
 		}
 		// Delete the snapshot.
-		this.delsnap(player, region, snapshots, snapshots.size());
+		this.delsnap(sender, region, snapshots, snapshots.size());
 	}
 	
 	/*
 	 * Deletes the specified snapshot for a region.
-	 * @param player - The player.
-	 * @param name - The name of the region.
-	 * @param frameNumber - The index of the frame to restore.
+	 * @param sender - The command sender.
+	 * @param regionName - The name of the region.
+	 * @param frameNumber - The number of the frame to delete. The first frame is always 1.
 	 */
-	protected void delsnap(Player player, String name, int frameNumber) {
+	protected void delsnap(CommandSender sender, String regionName, int frameNumber) {
 		// Get the controlled region
 		EbeanServer db = this.getDatabase();
-		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
+		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", regionName).findUnique();
 		if (region == null) {
-			this.sendMessage(player, "no such region");
+			this.sendMessage(sender, Messages.NoRegionError);
 			return;
 		}
 		// Get the region's snapshots in order.
 		List<RegionSnapshot> snapshots = db.find(RegionSnapshot.class).where().eq("regionId", region.getId()).orderBy("id").findList();
 		// Delete the snapshot.
-		this.delsnap(player, region, snapshots, frameNumber);
+		this.delsnap(sender, region, snapshots, frameNumber);
 	}
 	
 	/*
 	 * Deletes the specified snapshot for a region.
-	 * @param player - The player.
+	 * @param sender - The command sender.
 	 * @param region - The controlled region.
 	 * @param snapshots - A list of snapshots for the controlled region.
-	 * @param frameNumber - The index of the frame to restore.
+	 * @param frameNumber - The number of the frame to delete. The first frame is always 1.
 	 */
-	private void delsnap(Player player, ControlledRegion region, List<RegionSnapshot> snapshots, int frameNumber) {
+	private void delsnap(CommandSender sender, ControlledRegion region, List<RegionSnapshot> snapshots, int frameNumber) {
 		// Check index bounds.
 		if (frameNumber < 1 || frameNumber > snapshots.size()) {
-			this.sendMessage(player, "invalid frame");
+			this.sendMessage(sender, Messages.InvalidFrameError);
 			return;
 		}
 		// Get the blocks for this snapshot.
@@ -481,10 +525,11 @@ public class RegionControl extends JavaPlugin {
 			db.delete(savedBlocks);
 			db.delete(snapshots.get(frameNumber-1));
 			db.commitTransaction();
-			this.sendMessage(player, "snapshot deleted");
+			this.sendMessage(sender, Messages.SnapshotDeletedMessage);
 		}catch(Exception ex){
 			ex.printStackTrace();
-			this.sendMessage(player, "unable to delete snapshot! check server logs.");
+			this.sendMessage(sender, Messages.DeleteSnapshotsError);
+			if (sender instanceof Player) this.sendMessage(sender, Messages.CheckServerLogs);
 			db.rollbackTransaction();			
 		}
 	}
@@ -493,20 +538,20 @@ public class RegionControl extends JavaPlugin {
 	
 	/*
 	 * Creates a new controlled region.
-	 * @param player - The player.
-	 * @param name - The name of the new region.
+	 * @param player - The player creating the region.
+	 * @param regionName - The name of the new region.
 	 */
-	protected void create(Player player, String name) {
+	protected void create(Player player, String regionName) {
 		// check for existing region
 		EbeanServer db = this.getDatabase();
-		if (db.find(ControlledRegion.class).where().eq("name", name).findRowCount() != 0){
-			player.sendMessage("region already exists");
+		if (db.find(ControlledRegion.class).where().eq("name", regionName).findRowCount() != 0) {
+			player.sendMessage(Messages.RegionExistsError);
 			return;
 		}
 		// get selected region
 		com.sk89q.worldedit.regions.Region selection = this.getSelectedRegion(player);
 		if (selection == null) {
-			player.sendMessage("no region selected");
+			player.sendMessage(Messages.NoSelectionError);
 			return;
 		}
 		com.sk89q.worldedit.Vector max = selection.getMaximumPoint();
@@ -514,7 +559,7 @@ public class RegionControl extends JavaPlugin {
 		// create new controlled region
 		ControlledRegion region = new ControlledRegion();
 		region.setWorldName(player.getWorld().getName());
-		region.setName(name);
+		region.setName(regionName);
 		region.setMaxX((int)max.getX());
 		region.setMaxY((int)max.getY());
 		region.setMaxZ((int)max.getZ());
@@ -524,28 +569,28 @@ public class RegionControl extends JavaPlugin {
 		region.setCurrentPlayers(this.getPlayersInRegion(region).size());
 		// Save the new controlled region record.
 		db.save(region);
-		player.sendMessage("region created");
+		player.sendMessage(Messages.RegionCreatedMessage);
 	}
 	
 	/*
 	 * Updates a region field value.
-	 * @param player - The player.
-	 * @param name - The name of the region.
+	 * @param sender - The command sender.
+	 * @param regionName - The name of the region.
 	 * @param setting - The name of the setting to update.
 	 * @param value - The new setting value.
 	 */
-	protected void edit(Player player, String name, String setting, String value) {
+	protected void edit(CommandSender sender, String regionName, String setting, String value) {
 		// Get the controlled region.
 		EbeanServer db = this.getDatabase();
-		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
+		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", regionName).findUnique();
 		if (region == null){
-			this.sendMessage(player, "no such region");
+			this.sendMessage(sender, Messages.NoRegionError);
 			return;
 		}
 		// Update setting
 		if (setting.equals("name")) {
 			if (db.find(ControlledRegion.class).where().eq("name", value).findRowCount() != 0) {
-				this.sendMessage(player, "region already exists");
+				this.sendMessage(sender, Messages.RegionExistsError);
 				return;
 			}
 			region.setName(value);
@@ -554,11 +599,11 @@ public class RegionControl extends JavaPlugin {
 			try{
 				maxPlayers = Integer.parseInt(value);
 			}catch(Exception ex){
-				this.sendMessage(player, setting + " must be an integer!");
+				this.sendMessage(sender, Messages.IntegerError.replace("{$value}", setting));
 				return;
 			}
 			if (maxPlayers < -1) {
-				this.sendMessage(player, setting + " must be -1 or greater!");
+				this.sendMessage(sender, Messages.NegativeOneOrGreaterError.replace("{$value}", setting));
 				return;
 			}
 			region.setMaxPlayers(maxPlayers);
@@ -567,11 +612,11 @@ public class RegionControl extends JavaPlugin {
 			try{
 				minPlayers = Integer.parseInt(value);
 			}catch(Exception ex){
-				this.sendMessage(player, setting + " must be an integer!");
+				this.sendMessage(sender, Messages.IntegerError.replace("{$value}", setting));
 				return;
 			}
 			if (minPlayers < 0) {
-				this.sendMessage(player, setting + " must be zero or greater!");
+				this.sendMessage(sender, Messages.ZeroOrGreaterError.replace("{$value}", setting));
 				return;
 			}
 			region.setMinPlayers(minPlayers);
@@ -580,11 +625,11 @@ public class RegionControl extends JavaPlugin {
 			try{
 				lockHealth = Integer.parseInt(value);
 			}catch(Exception ex){
-				this.sendMessage(player, setting + " must be an integer!");
+				this.sendMessage(sender, Messages.IntegerError.replace("{$value}", setting));
 				return;
 			}
 			if (lockHealth < 0 || lockHealth > 20) {
-				this.sendMessage(player, setting + " must be in the range 0 to 20!");
+				this.sendMessage(sender, Messages.ValueRangeError.replace("{$value}", setting).replace("{$range}", "0 to 20"));
 				return;
 			}
 			region.setLockHealth(lockHealth);
@@ -593,11 +638,11 @@ public class RegionControl extends JavaPlugin {
 			try{
 				unlockHealth = Integer.parseInt(value);
 			}catch(Exception ex){
-				this.sendMessage(player, setting + " must be an integer!");
+				this.sendMessage(sender, Messages.IntegerError.replace("{$value}", setting));
 				return;
 			}
 			if (unlockHealth < 0 || unlockHealth > 20) {
-				this.sendMessage(player, setting + " must be in the range 0 to 20!");
+				this.sendMessage(sender, Messages.ValueRangeError.replace("{$value}", setting).replace("{$range}", "0 to 20"));
 				return;
 			}
 			region.setUnlockHealth(unlockHealth);
@@ -606,11 +651,11 @@ public class RegionControl extends JavaPlugin {
 			try{
 				setInventory = Integer.parseInt(value);
 			}catch(Exception ex){
-				this.sendMessage(player, setting + " must be an integer!");
+				this.sendMessage(sender, Messages.IntegerError.replace("{$value}", setting));
 				return;
 			}
 			if (setInventory < 0 || setInventory > 2) {
-				this.sendMessage(player, setting + " must be in the range 0 to 2!");
+				this.sendMessage(sender, Messages.ValueRangeError.replace("{$value}", setting).replace("{$range}", "0 to 2"));
 				return;
 			}
 			region.setSetInventory(setInventory);
@@ -619,11 +664,11 @@ public class RegionControl extends JavaPlugin {
 			try{
 				restoreInventory = Integer.parseInt(value);
 			}catch(Exception ex){
-				this.sendMessage(player, setting + " must be an integer!");
+				this.sendMessage(sender, Messages.IntegerError.replace("{$value}", setting));
 				return;
 			}
 			if (restoreInventory < 0 || restoreInventory > 2) {
-				this.sendMessage(player, setting + " must be in the range 0 to 2!");
+				this.sendMessage(sender, Messages.ValueRangeError.replace("{$value}", setting).replace("{$range}", "0 to 2"));
 				return;
 			}
 			region.setRestoreInventory(restoreInventory);
@@ -645,31 +690,34 @@ public class RegionControl extends JavaPlugin {
 			region.setSetInventoryMessage(value);
 		}else if(setting.equalsIgnoreCase("restoreInventoryMessage") || setting.equalsIgnoreCase("rim")) {
 			region.setRestoreInventoryMessage(value);
+		}else if(setting.equalsIgnoreCase("joinMoveMessage") || setting.equalsIgnoreCase("jmm")) {
+			region.setRestoreInventoryMessage(value);
 		}else{
-			this.sendMessage(player, "no such setting: " + setting);
+			this.sendMessage(sender, Messages.NoSuchSetting.replace("{$setting}", setting));
 			return;
 		}
 		// Update the controlled section.
 		db.update(region);
-		this.sendMessage(player, "region updated");
+		this.sendMessage(sender, Messages.RegionUpdatedMessage);
 	}
 	
 	/*
 	 * Deletes a controlled region.
-	 * @param player - The player.
-	 * @param name - The name of the region.
+	 * @param sender - The command sender.
+	 * @param regionName - The name of the region to delete.
 	 */
-	protected void delete(Player player, String name) {
+	protected void delete(CommandSender sender, String regionName) {
 		// Get the controlled region.
 		EbeanServer db = this.getDatabase();
-		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
+		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", regionName).findUnique();
 		if (region == null){
-			this.sendMessage(player, "no such region");
+			this.sendMessage(sender, Messages.NoRegionError);
 			return;
 		}
 		// Do not allow delete of locked region.
 		if (region.getLocked()) {
-			this.sendMessage(player, "the region is locked");
+			this.sendMessage(sender, Messages.DeleteRegionError);
+			this.sendMessage(sender, Messages.RegionLockedError);
 			return;
 		}
 		// Delete region and all related records.
@@ -684,109 +732,206 @@ public class RegionControl extends JavaPlugin {
 			db.delete(regionItems);
 			db.delete(region);
 			db.commitTransaction();
-			this.sendMessage(player, "region deleted");			
+			this.sendMessage(sender, Messages.RegionDeletedMessage);
 		}catch(Exception ex){
 			ex.printStackTrace();
-			this.sendMessage(player, "unable to delete region! check server logs.");
+			this.sendMessage(sender, Messages.DeleteRegionError);
+			if (sender instanceof Player) this.sendMessage(sender, Messages.CheckServerLogs);
 			db.rollbackTransaction();
 		}
 	}
 	
 	/*
 	 * Displays information about a controlled region.
-	 * @param player - The player.
+	 * @param sender - The command sender.
 	 * @param name - The name of the region.
 	 */
-	protected void info(Player player, String name) {
+	protected void info(CommandSender sender, String name) {
 		// Get the controlled region.
 		EbeanServer db = this.getDatabase();
 		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
 		if (region == null) {
-			player.sendMessage("no such region");
+			sender.sendMessage(Messages.NoRegionError);
 			return;
 		}
-		// Display name and world.
-		player.sendMessage("Region: " + region.getName() + " [" + region.getWorldName() + "]");
+		// Display region info.
+		sender.sendMessage(this.getSettingText("Name", region.getName()));
+		sender.sendMessage(this.getSettingText("World", region.getWorldName()));
+		sender.sendMessage(this.getSettingText("Locked", (region.getLocked() ? "yes" : "no")));
 		// Display region bounds.
-		String msg = "max(" + Double.toString(region.getMaxX()) + ", " + Double.toString(region.getMaxY()) + ", " + Double.toString(region.getMaxZ()) + ")";
-		msg += ", min(" + Double.toString(region.getMinX()) + ", " + Double.toString(region.getMinY()) + ", " + Double.toString(region.getMinZ()) + ")";
-		player.sendMessage(msg);
+		sender.sendMessage(
+			this.getSettingText("Max", Double.toString(region.getMaxX()) + ", " + Double.toString(region.getMaxY()) + ", " + Double.toString(region.getMaxZ())) + " " + 
+			this.getSettingText("Min", Double.toString(region.getMinX()) + ", " + Double.toString(region.getMinY()) + ", " + Double.toString(region.getMinZ())));
 		// Display snapshot info.
 		int snapshotId = region.getSnapshotId();
 		if (snapshotId != 0){
 			List<RegionSnapshot> snapshots = db.find(RegionSnapshot.class).where().eq("regionId", region.getId()).orderBy("id").findList();
 			RegionSnapshot currentSnapshot = db.find(RegionSnapshot.class).where().eq("id", snapshotId).findUnique();
-			msg = "snapshots: " + Integer.toString(snapshots.size());
-			msg += ", current: " + Integer.toString(snapshots.indexOf(currentSnapshot) + 1);
+			sender.sendMessage(
+				this.getSettingText("Snapshots", Integer.toString(snapshots.size())) + " " +
+				this.getSettingText("Frame", Integer.toString(snapshots.indexOf(currentSnapshot) + 1)));
 		}else{
-			msg = "no snapshots";
+			sender.sendMessage(this.getSettingText("Snapshots", "none"));
 		}
-		// Display region locked status.
-		if (region.getLocked()){
-			msg += ", region is locked";
-		}else{
-			msg += ", region is not locked";
-		}
-		player.sendMessage(msg);
-		// Display max, min and current players info.
-		if (region.getMaxPlayers() < 0){
-			msg = "maxPlayers: no limit";
-		}else{
-			msg = "maxPlayers: " + region.getMaxPlayers();
-		}
-		msg += ", minPlayers: " + region.getMinPlayers();
-		msg += ", currentPlayers: " + region.getCurrentPlayers();
-		player.sendMessage(msg);
+		// Display player info.
+		sender.sendMessage(
+			this.getSettingText("Max Players", (region.getMaxPlayers() < 0 ? "no limit" : Integer.toString(region.getMaxPlayers()))) + " " +
+			this.getSettingText("Min Players", region.getMinPlayers()) + " " +
+			this.getSettingText("Current Players", region.getCurrentPlayers()));
 		// Display health settings.
-		msg = "lockHealth: " + region.getLockHealth();
-		msg += ", unlockHealth: " + region.getUnlockHealth();
-		player.sendMessage(msg);
+		sender.sendMessage(
+			this.getSettingText("Lock Health", region.getLockHealth()) + " " +
+			this.getSettingText("Unlock Health", region.getUnlockHealth()));
 		// Display inventory settings.
-		msg = "setInventory: " + region.getSetInventory();
-		msg += ", restoreInventory: " + region.getRestoreInventory();
-		player.sendMessage(msg);
+		sender.sendMessage(
+			this.getSettingText("Set Inventory", region.getSetInventory()) + " " +
+			this.getSettingText("Restore Inventory", region.getRestoreInventory()));
+		// Display spawn information.
+		sender.sendMessage(this.getSettingText("Spawn Location: ", 
+			region.getSpawnSet() ? Double.toString(region.getSpawnX()) + ", " + Double.toString(region.getSpawnY()) + ", " + Double.toString(region.getSpawnZ()) : "not set"));
+	}
+	
+	/*
+	 * Returns a formatted setting string
+	 * @param settingName - The name of the setting.
+	 * @param value - The setting value.
+	 */
+	private String getSettingText(String settingName, String value){
+		return ChatColor.GRAY + settingName + ": " + ChatColor.BLUE + value;
+	}
+	
+	/*
+	 * Returns a formatted setting string
+	 * @param settingName - The name of the setting.
+	 * @param value - The setting value.
+	 */
+	private String getSettingText(String settingName, Integer value){
+		return this.getSettingText(settingName, Integer.toString(value));
 	}
 	
 	/*
 	 * Displays a controlled region's messages.
-	 * @param player - The player.
+	 * @param sender - The command sender.
 	 * @param name - The name of the region.
 	 */
-	protected void messages(Player player, String name) {
+	protected void messages(CommandSender sender, String name) {
 		// Get the controlled region.
 		EbeanServer db = this.getDatabase();
 		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
 		if (region == null) {
-			player.sendMessage("no such region");
+			sender.sendMessage(Messages.NoRegionError);
 			return;
 		}
-		// Display messages.
-		player.sendMessage("maxMessage: " + region.getMaxMessage());
-		player.sendMessage("minMessage: " + region.getMinMessage());
-		player.sendMessage("minMessage1: " + region.getMinMessage1());
-		player.sendMessage("enterMessage: " + region.getEnterMessage());
-		player.sendMessage("leaveMessage: " + region.getLeaveMessage());
-		player.sendMessage("noEnterMessage: " + region.getNoEnterMessage());
-		player.sendMessage("noLeaveMessage: " + region.getNoLeaveMessage());
-		player.sendMessage("setInventoryMessage: " + region.getSetInventoryMessage());
-		player.sendMessage("restoreInventoryMessage: " + region.getRestoreInventoryMessage());		
+		// Display messages
+		sender.sendMessage(this.getSettingText("Max Players Message", region.getMaxMessage()));
+		sender.sendMessage(this.getSettingText("Min Players Message", region.getMinMessage()));
+		sender.sendMessage(this.getSettingText("Min Players Message (1)", region.getMinMessage1()));
+		sender.sendMessage(this.getSettingText("Enter Region Message", region.getEnterMessage()));
+		sender.sendMessage(this.getSettingText("Leave Region Message", region.getLeaveMessage()));
+		sender.sendMessage(this.getSettingText("Cannot Enter Message", region.getNoEnterMessage()));
+		sender.sendMessage(this.getSettingText("Cannot Leave Message", region.getNoLeaveMessage()));
+		sender.sendMessage(this.getSettingText("Set Inventory Message", region.getSetInventoryMessage()));
+		sender.sendMessage(this.getSettingText("Restore Inventory Message", region.getRestoreInventoryMessage()));
+		sender.sendMessage(this.getSettingText("Teleport On Join Message", region.getJoinMoveMessage()));
+	}
+	
+	/*
+	 * Sets the default spawn locations.
+	 * This location is used to move players out of a locked region when the plugin is 
+	 * disabled or when a player joins into a locked region. Can also be used to teleport to
+	 * the region.
+	 * @param player - The player.
+	 * @param name - The name of the region.
+	 */
+	protected void setSpawnLocation(Player player, String name) {
+		// Get the controlled region.
+		EbeanServer db = this.getDatabase();
+		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
+		if (region == null) {
+			player.sendMessage(Messages.NoRegionError);
+			return;
+		}
+		// Spawn location must be outside  region.
+		Location location = player.getLocation();
+		if (this.regionContainsLocation(region, location)) {
+			player.sendMessage(Messages.SpawnNotSetError);
+			player.sendMessage(Messages.SpawnLocationError);
+			return;
+		}
+		// Update the spawn location.
+		region.setSpawnX(location.getBlockX());
+		region.setSpawnY(location.getBlockY());
+		region.setSpawnZ(location.getBlockZ());
+		region.setSpawnSet(true);
+		// Save changes.
+		try{
+			db.update(region);
+			player.sendMessage(Messages.ValueSetMessage.replace("{$setting}", "Spawn Location").replace("{$value}", 
+				region.getSpawnX() + ", " + region.getSpawnY() + ", " + region.getSpawnZ()));
+		}catch(Exception ex){
+			ex.printStackTrace();
+			this.sendMessage(player, Messages.LockRegionError);
+			this.sendMessage(player, Messages.CheckServerLogs);			
+		}
+	}
+	
+	/*
+	 * Teleports the player to the region's default spawn location if defined.
+	 * @param player - The player.
+	 * @param name - The name of the region.
+	 */
+	protected void teleport(Player player, String name) {
+		// Get the controlled region.
+		EbeanServer db = this.getDatabase();
+		ControlledRegion region = db.find(ControlledRegion.class).where().eq("name", name).findUnique();
+		if (region == null) {
+			player.sendMessage(Messages.NoRegionError);
+			return;
+		}
+		// Teleport the player.
+		if (region.getSpawnSet()) {
+			player.teleport(this.getSpawnLocation(region));
+		}else{
+			player.sendMessage(Messages.SpawnNotSetError);
+		}
 	}
 	
 	/*
 	 * Lists all controlled regions including locked status and number of players if locked.
-	 * @param player - The player.
+	 * @param sender - The command sender.
 	 */
-	protected void list(Player player) {
+	protected void list(CommandSender sender) {
 		StringBuilder message = new StringBuilder();
+		message.append(ChatColor.BLUE);
 		message.append("Controlled Regions: ");
+		int lockedCount = 0;
 		EbeanServer db = this.getDatabase();
 		List<ControlledRegion> regions = db.find(ControlledRegion.class).orderBy("name").findList();
-		if (regions.size() == 0) message.append("no regions defined");
-		for (ControlledRegion region : regions){
-			message.append(region.getName());
-			if (region != regions.get(regions.size()-1)) message.append(", ");
+		if (regions.size() == 0){
+			message.append(ChatColor.BLUE);
+			message.append("No regions defined.");
+		}else{
+			for (ControlledRegion region : regions){
+				message.append(ChatColor.BLUE);
+				message.append(region.getName());
+				if (region.getLocked()){
+					lockedCount++;
+					message.append(ChatColor.DARK_AQUA);
+					message.append(" (L)");
+				}
+				if (region != regions.get(regions.size()-1)){
+					message.append(ChatColor.BLUE);
+					message.append(", ");
+				}
+			}
 		}
-		player.sendMessage(message.toString());
+		message.append(". ");
+		message.append(ChatColor.DARK_AQUA);
+		message.append(lockedCount);
+		message.append("/");
+		message.append(regions.size());
+		message.append(" regions are locked.");
+		sender.sendMessage(message.toString());
 	}
 	
 	/*
@@ -802,10 +947,22 @@ public class RegionControl extends JavaPlugin {
 		return region;
 	}
 	
+	/*
+	 * Returns the default spawn location for a region.
+	 * @param region - The region.
+	 */
+	protected Location getSpawnLocation(ControlledRegion region) {
+		World world = this.getServer().getWorld(region.getWorldName());
+		if (region.getSpawnSet()){
+			return new Location(world, region.getSpawnX(), region.getSpawnY(), region.getSpawnZ());
+		}
+		return world.getSpawnLocation();
+	}
+	
     /*
      * Ensures that the database for this plugin is installed and available.
      */
-    private void setupDatabase() {
+    private void installDatabase() {
 		try {
 			File ebeans = new File("ebean.properties");
 			if (!ebeans.exists()) {
@@ -817,7 +974,7 @@ public class RegionControl extends JavaPlugin {
 			}
 			this.getDatabase().find(ControlledRegion.class).findRowCount();
 		} catch (PersistenceException ex) {
-			System.out.println(this.name + " installing database");
+			System.out.print(Messages.InstallingDatabasesMessage.replace("{$name}", this.name));
 			installDDL();
 		}
 	}
@@ -838,15 +995,15 @@ public class RegionControl extends JavaPlugin {
 	
 	/*
 	 * Sends a message to a player.
-	 * @param player - The player.
+	 * @param sender - The command sender.
 	 * @param message - The message.
 	 */
-	private void sendMessage(Player player, String message){
+	protected void sendMessage(CommandSender sender, String message){
 		if (message.length() == 0) return;
-		if (player == null){
+		if (sender == null){
 			this.getServer().broadcastMessage(message);
 		}else{
-			player.sendMessage(message);
+			sender.sendMessage(message);
 		}
 	}
 	
@@ -855,7 +1012,7 @@ public class RegionControl extends JavaPlugin {
 	 * @param players - The list of players.
 	 * @param message - The message.
 	 */
-	private void sendMessage(List<Player> players, String message) {
+	protected void sendMessage(List<Player> players, String message) {
 		if (message.length() == 0) return;
 		for (Player player : players){
 			this.sendMessage(player, message);
@@ -891,7 +1048,7 @@ public class RegionControl extends JavaPlugin {
 	 * @param region - The region.
 	 * @param player - The player.
 	 */
-	private boolean regionContainsPlayer(ControlledRegion region, Player player) {
+	protected boolean regionContainsPlayer(ControlledRegion region, Player player) {
 		Location location = player.getLocation();
 		if (location.getX() > region.getMaxX()) return false;
 		if (location.getY() > region.getMaxY()) return false;
@@ -902,6 +1059,18 @@ public class RegionControl extends JavaPlugin {
 		return true;
 	}
 	
+	/*
+	 * Indicates whether a region contains a location.
+	 * @param region - The region.
+	 * @param location - The location.
+	 */
+	protected boolean regionContainsLocation(ControlledRegion region, Location location) {
+		if(location.getBlockX() < region.getMinX() || location.getBlockX() > region.getMaxX()) return false;
+		if(location.getBlockY() < region.getMinY() || location.getBlockY() > region.getMaxY()) return false;
+		if(location.getBlockZ() < region.getMinZ() || location.getBlockZ() > region.getMaxZ()) return false;
+		return true;
+	}
+
 	/*
 	 * Creates a SavedItem from an ItemStack.
 	 * @param item - The item.
@@ -1051,7 +1220,7 @@ public class RegionControl extends JavaPlugin {
 			inventory.setBoots(item);
 			break;
 		default:
-			System.out.print("Error - Invalid item category: " + category);
+			System.out.print(Messages.InvalidItemCategoryError.replace("{$category}", Integer.toString(category)));
 			break;
 		}		
 	}

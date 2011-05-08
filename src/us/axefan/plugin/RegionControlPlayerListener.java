@@ -1,5 +1,6 @@
 package us.axefan.plugin;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.bukkit.Location;
@@ -22,16 +23,17 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 	}
 	
 	public void onPlayerMove(PlayerMoveEvent event) {
-		// Check all region locks in current world.
-		// TODO: Store chunk ids for better performance.
+		// Determine whether the player is crossing a controlled region's bounds.
 		EbeanServer db = plugin.getDatabase();
 		Player player = event.getPlayer();
 		List<ControlledRegion> regions = db.find(ControlledRegion.class).where().eq("worldName", player.getWorld().getName()).findList();
 		if (regions.size() == 0) return;
+		Location from = event.getFrom();
+		Location to = event.getTo();
 		for (ControlledRegion region : regions) {
 			// Check if player is trying to cross region bounds.
-			Boolean fromRegion = this.regionContainsLocation(region, event.getFrom());
-			Boolean toRegion = this.regionContainsLocation(region, event.getTo());
+			Boolean fromRegion = plugin.regionContainsLocation(region, from);
+			Boolean toRegion = plugin.regionContainsLocation(region, to);
 			if (fromRegion && toRegion) continue;
 			if (!fromRegion && !toRegion) continue;
 			if (fromRegion && !toRegion) {
@@ -46,7 +48,7 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 					String msg = region.getLeaveMessage();
 					if (msg.length() > 0) player.sendMessage(msg);
 					// Restore player inventory.
-					if (region.getRestoreInventory() == 1) {
+					if (region.getRestoreInventory() == RegionControl.RestoreInventoryOnLeave) {
 						db.delete(plugin.restoreInventory(player, region));
 					}
 					// Decrement current players.
@@ -75,7 +77,7 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 					String msg = region.getEnterMessage();
 					if (msg.length() > 0) player.sendMessage(msg);
 					// Set player inventory.
-					if (region.getSetInventory() == 1) {
+					if (region.getSetInventory() == RegionControl.SetInventoryOnEnter) {
 						db.save(plugin.saveInventory(player, region));
 						plugin.setInventory(player, region);
 					}
@@ -88,11 +90,28 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 		}
 	}
 	
-	
 	public void onPlayerJoin(PlayerJoinEvent event) {
-		
-		// TODO: Prevent join into locked region.
-		System.out.print(event.getPlayer().getName() + " joined");
+		// Check all region in current world.
+		EbeanServer db = plugin.getDatabase();
+		Player player = event.getPlayer();
+		List<ControlledRegion> worldRegions = db.find(ControlledRegion.class).where().eq("worldName", player.getWorld().getName()).findList();
+		if (worldRegions.size() == 0) return;
+		List<ControlledRegion> saveRegions = new ArrayList<ControlledRegion>();
+		Location location = player.getLocation();
+		for (ControlledRegion region : worldRegions) {
+			if (plugin.regionContainsLocation(region, location)) {
+				if (region.getLocked()) {
+					// move player to region's spawn location and notify player.
+					player.teleport(plugin.getSpawnLocation(region));
+					plugin.sendMessage(player, region.getJoinMoveMessage());
+				}else{
+					// add player to region
+					region.setCurrentPlayers(region.getCurrentPlayers()+1);
+					saveRegions.add(region);
+				}
+			}
+		}
+		if (saveRegions.size() > 0) db.save(saveRegions);
 	}
 	
 	public void onPlayerQuit(PlayerQuitEvent event) {
@@ -111,18 +130,6 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 		System.out.print(event.getPlayer().getName() + " teleported");
 	}
 	
-	/*
-	 * Indicates whether a region contains a location.
-	 * @param region - The region.
-	 * @param location - The location.
-	 */
-	private boolean regionContainsLocation(ControlledRegion region, Location location) {
-		if(location.getBlockX() < region.getMinX() || location.getBlockX() > region.getMaxX()) return false;
-		if(location.getBlockY() < region.getMinY() || location.getBlockY() > region.getMaxY()) return false;
-		if(location.getBlockZ() < region.getMinZ() || location.getBlockZ() > region.getMaxZ()) return false;
-		return true;
-	}
-
 	/*
 	 * Prevents a player from moving.
 	 * @param event - The PLAYER_MOVE event.
