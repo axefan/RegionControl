@@ -33,6 +33,9 @@ public class SavedBlock {
     
     @NotNull
     private int z;
+    
+    @NotNull
+    private String lines;
 
 	public void setId(int id) {
 		this.id = id;
@@ -96,6 +99,14 @@ public class SavedBlock {
 
 	public int getZ() {
 		return z;
+	}
+
+	public void setLines(String lines) {
+		this.lines = lines;
+	}
+
+	public String getLines() {
+		return lines;
 	}
     
 }

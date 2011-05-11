@@ -40,19 +40,18 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 				// Player is trying to leave the region.
 				if (region.getLocked()) {
 					this.preventPlayerMove(event);
-					String msg = region.getNoLeaveMessage();
-					if (msg.length() > 0) player.sendMessage(msg);
+					plugin.sendMessage(player, region.getNoLeaveMessage());
 					return;
 				}else{
 					// Send player message.
-					String msg = region.getLeaveMessage();
-					if (msg.length() > 0) player.sendMessage(msg);
+					plugin.sendMessage(player, region.getLeaveMessage());
 					// Restore player inventory.
 					if (region.getRestoreInventory() == RegionControl.RestoreInventoryOnLeave) {
-						db.delete(plugin.restoreInventory(player, region));
+						if (plugin.verbose) plugin.sendMessage("Restoring player inventory when leaving region - " + player.getName() + " left region " + region.getName() + ".");
+						db.delete(plugin.restoreInventory(player, region, true));
 					}
-					// Decrement current players.
-					region.setCurrentPlayers(region.getCurrentPlayers()-1);
+					// Set current players.
+					region.setCurrentPlayers(plugin.getPlayersInRegion(region).size());
 					db.update(region);
 					return;
 				}
@@ -60,30 +59,35 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 				// Player is trying to enter the region.
 				if (region.getLocked()) {
 					// Region is locked
+					plugin.sendMessage(player, region.getNoEnterMessage());
 					this.preventPlayerMove(event);
-					String msg = region.getNoEnterMessage();
-					if (msg.length() > 0) player.sendMessage(msg);
 					return;
 				}else{
 					// Check max players.
-					if (region.getMaxPlayers() >= 0 && region.getCurrentPlayers() == region.getMaxPlayers()) {
+					if (region.getMaxPlayers() > -1 && region.getCurrentPlayers() == region.getMaxPlayers()){
 						// No more players allowed.
-						String msg = region.getMaxMessage();
-						if (msg.length() > 0) player.sendMessage(msg);
 						this.preventPlayerMove(event);
+						plugin.sendMessage(player, region.getMaxMessage());
 						return;
 					}
 					// Send player message.
-					String msg = region.getEnterMessage();
-					if (msg.length() > 0) player.sendMessage(msg);
+					plugin.sendMessage(player, region.getEnterMessage());
 					// Set player inventory.
 					if (region.getSetInventory() == RegionControl.SetInventoryOnEnter) {
+						if (plugin.verbose) plugin.sendMessage("Setting player inventory on player move - " + player.getName() + " entered region " + region.getName() + ".");
 						db.save(plugin.saveInventory(player, region));
 						plugin.setInventory(player, region);
 					}
 					// Increment current players.
 					region.setCurrentPlayers(region.getCurrentPlayers()+1);
-					db.update(region);
+					// Check max player lock.
+					if (region.getLockOnMaxPlayers() && region.getCurrentPlayers() == region.getMaxPlayers()){
+						// Auto-lock region.
+						if (plugin.verbose) plugin.sendMessage("Locking region on player move due to max players - " + player.getName() + " entered region " + region.getName() + ".");
+						plugin.lock(null, region);
+					}else{
+						db.update(region);
+					}
 					return;
 				}
 			}
@@ -91,42 +95,70 @@ public class RegionControlPlayerListener extends org.bukkit.event.player.PlayerL
 	}
 	
 	public void onPlayerJoin(PlayerJoinEvent event) {
-		// Check all region in current world.
+		// Check all regions in current world.
 		EbeanServer db = plugin.getDatabase();
 		Player player = event.getPlayer();
 		List<ControlledRegion> worldRegions = db.find(ControlledRegion.class).where().eq("worldName", player.getWorld().getName()).findList();
 		if (worldRegions.size() == 0) return;
-		List<ControlledRegion> saveRegions = new ArrayList<ControlledRegion>();
+		List<ControlledRegion> regions = new ArrayList<ControlledRegion>();
 		Location location = player.getLocation();
 		for (ControlledRegion region : worldRegions) {
 			if (plugin.regionContainsLocation(region, location)) {
 				if (region.getLocked()) {
-					// move player to region's spawn location and notify player.
+					// Region is locked
+					if (plugin.verbose) plugin.sendMessage("Teleporting player on join due to region locked - " + player.getName() + " from region " + region.getName() + ".");
 					player.teleport(plugin.getSpawnLocation(region));
-					plugin.sendMessage(player, region.getJoinMoveMessage());
+					plugin.sendMessage(player, region.getJoinMoveMessage()); // TODO: Change to joinLockedMessage
 				}else{
-					// add player to region
+					// Check max players.
+					if (region.getMaxPlayers() > -1 && region.getCurrentPlayers() == region.getMaxPlayers()) {
+						// No more players allowed.
+						if (plugin.verbose) plugin.sendMessage("Teleporting player on join due to max players - " + player.getName() + " from region " + region.getName() + ".");
+						player.teleport(plugin.getSpawnLocation(region));
+						if (plugin.verbose) plugin.sendMessage(player, region.getJoinMoveMessage()); // TODO: Change to joinMaxMessage
+						return;
+					}
+					// Send player message.
+					plugin.sendMessage(player, region.getEnterMessage());
+					// Set player inventory.
+					if (region.getSetInventory() == RegionControl.SetInventoryOnEnter) {
+						if (plugin.verbose) plugin.sendMessage("Setting player inventory on player join - " + player.getName() + " joined in region " + region.getName() + ".");
+						db.save(plugin.saveInventory(player, region));
+						plugin.setInventory(player, region);
+					}
+					// Increment current players.
 					region.setCurrentPlayers(region.getCurrentPlayers()+1);
-					saveRegions.add(region);
+					// Check max player lock.
+					if (region.getMaxPlayers() > -1 && region.getCurrentPlayers() == region.getMaxPlayers()) {
+						if (plugin.verbose) plugin.sendMessage("Locking region on join due to max players - " + player.getName() + " joined in region " + region.getName() + ".");
+						plugin.lock(null, region);
+					}else{
+						regions.add(region);
+					}					
 				}
 			}
 		}
-		if (saveRegions.size() > 0) db.save(saveRegions);
+		if (regions.size() > 0) db.save(regions);
 	}
 	
 	public void onPlayerQuit(PlayerQuitEvent event) {
-		// TODO: Remove locks and items on locked player quit.
+		plugin.removePlayer(event.getPlayer());
 	}
 	
 	public void onPlayerKick(PlayerKickEvent event) {
-		// TODO: Remove locks and items on locked player quit.
+		plugin.removePlayer(event.getPlayer());
 	}
 	
 	public void onPlayerRespawn(PlayerRespawnEvent event) {
+		// TODO: determine if onPlayerRespawn needs to be handled.
 		System.out.print(event.getPlayer().getName() + " spawned");
 	}
 	
 	public void onPlayerTeleport(PlayerTeleportEvent event) {
+		// TODO: Handle player teleport from and to a region.
+		// Not sure how to handle this yet.
+		// Probably need to handle lockOnMaxPlayers.  Should we use teleport
+		// for transferring from one locked region to another or use a new command "transfer".
 		System.out.print(event.getPlayer().getName() + " teleported");
 	}
 	

@@ -1,8 +1,8 @@
 package us.axefan.plugin;
 
+import org.bukkit.block.Sign;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
-import org.bukkit.block.Sign;
 import org.bukkit.event.block.BlockRedstoneEvent;
 
 public class RegionControlBlockListener extends org.bukkit.event.block.BlockListener {
@@ -17,16 +17,19 @@ public class RegionControlBlockListener extends org.bukkit.event.block.BlockList
 		Block block = event.getBlock();
 		if (block.getBlockPower() == 0) return;
 		BlockState blockState = block.getState();
-		if (blockState instanceof Sign)
-		{
+		if (blockState instanceof Sign) {
 		    Sign sign = (Sign)blockState;
 		    String[] lines = sign.getLines();
-		    if (lines[0].trim().equalsIgnoreCase("[RegionControl]")) {
-		    	if (lines[1].trim().equalsIgnoreCase("frame")) {
-		    		plugin.frame(null, lines[2]);
-		    	}
-		    }
+		    String label = lines[0].trim();
+		    if (!label.equalsIgnoreCase("[rc]")) return;
+		    String[] args = new String[lines.length-1];
+		    System.arraycopy(lines, 1, args, 0, lines.length-1);
+		    args = ArrayUtils.trim(args);
+		    if (plugin.verbose) plugin.sendMessage("Sending redstone command: " + label + " " + ArrayUtils.join(args, " "));
+		    plugin.getCommand("rc").getExecutor().onCommand(null, null, label, args);
 		}
 	}
+	
+	
 	
 }

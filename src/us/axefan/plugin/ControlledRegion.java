@@ -41,6 +41,9 @@ public class ControlledRegion {
     private int snapshotId = 0;
     
     @NotNull
+    private int initialFrame = 0; // 0 = no change
+    
+    @NotNull
     private Boolean locked = false;
     
     @NotNull
@@ -68,13 +71,16 @@ public class ControlledRegion {
     private Boolean lockOnMaxPlayers = false;
     
     @NotNull
-    private String maxMessage = "no more players allowed"; // alias = maxm
+    private Boolean failOnMinPlayers = false;
+
+    @NotNull
+    private String maxMessage = Messages.DefaultMaxMessage; // alias = maxm
     
     @NotNull
-    private String minMessage = "waiting for {$count} more players"; // alias = minm
+    private String minMessage = Messages.DefaultMinMessage; // alias = minm
     
     @NotNull
-    private String minMessage1 = "waiting for 1 more player"; // alias = min1
+    private String minMessage1 = Messages.DefaultMinMessage1; // alias = min1
     
     @NotNull
     private String enterMessage = ""; // alias = em
@@ -83,10 +89,10 @@ public class ControlledRegion {
     private String leaveMessage = ""; // alias = lm
     
     @NotNull
-    private String noEnterMessage = "You cannot enter this area!"; // alias = nem
+    private String noEnterMessage = Messages.DefaultNoEnterMessage; // alias = nem
     
     @NotNull
-    private String noLeaveMessage = "You cannot leave this area!"; // alias = nlm
+    private String noLeaveMessage = Messages.DefaultNoLeaveMessage; // alias = nlm
     
     @NotNull
     private String joinMoveMessage = ""; // alias = jmm
@@ -111,14 +117,7 @@ public class ControlledRegion {
     
     @NotNull
     private int spawnZ = 0;
-    
-    // TODO: Add ControlledRegion.failLocation (for kick from controlled region - death on ControlledRegion.maxTries, on reload).
-    // TODO: Add ControlledRegion.retryLocation point (for reset after death when less than ControlledRegion.maxTries.
-    // TODO: Add ControlledRegion.victoryLocation
-    // TODO: Add ControlledRegion.lives & LockedPlayer.lives (number of deaths before kick to ControlledRegion.failSpawn).
-    // TODO: Add ControlledRegion.lockOnMaxPlayers
-    // TODO: Add defaultFrame setting.  This frame will be loaded when the plugin loads. 0 = no change.
-    
+        
 	public void setId(int id) {
 		this.id = id;
 	}
@@ -389,5 +388,21 @@ public class ControlledRegion {
 
 	public String getJoinMoveMessage() {
 		return joinMoveMessage;
+	}
+
+	public void setInitialFrame(int initialFrame) {
+		this.initialFrame = initialFrame;
+	}
+
+	public int getInitialFrame() {
+		return initialFrame;
+	}
+
+	public void setFailOnMinPlayers(Boolean failOnMinPlayers) {
+		this.failOnMinPlayers = failOnMinPlayers;
+	}
+
+	public Boolean getFailOnMinPlayers() {
+		return failOnMinPlayers;
 	}
 }
